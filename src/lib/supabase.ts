@@ -3,23 +3,25 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * CONFIGURACIÓN DE SEGURIDAD PARA SUPABASE
  * 
- * Este archivo usa variables de entorno cuando están disponibles.
- * Si no están disponibles, usa las claves predeterminadas.
- * 
- * Para máxima seguridad:
- * 1. Crea un archivo .env.local con tus claves
- * 2. En producción, configura las variables en tu hosting
+ * Este archivo primero intentará cargar las credenciales desde localStorage (instalador)
+ * Si no están disponibles, usará las variables de entorno.
+ * Si éstas tampoco están disponibles, usará las claves predeterminadas.
  */
 
-// URL de Supabase
-const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || 'https://numjphltuyfbpyrnevlu.supabase.co';
+// Intentar obtener las credenciales del localStorage primero (guardadas por el instalador)
+const STORED_URL = localStorage.getItem('supabaseUrl');
+const STORED_ANON_KEY = localStorage.getItem('supabaseAnonKey');
+const STORED_SERVICE_KEY = localStorage.getItem('supabaseServiceKey');
+
+// URL de Supabase (priorizar localStorage, luego variables de entorno, luego valor predeterminado)
+const SUPABASE_URL = STORED_URL || import.meta.env?.VITE_SUPABASE_URL || 'https://ageqgrjbutdgizcthwkv.supabase.co';
 
 // Claves API
-const ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || 
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bWpwaGx0dXlmYnB5cm5ldmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyMjkzMDUsImV4cCI6MjA2MjgwNTMwNX0.Tzz4PO4bex6-UvaDrLs4FnN8y3x72liy5BoluRnOvCI';
+const ANON_KEY = STORED_ANON_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY || 
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnZXFncmpidXRkZ2l6Y3Rod2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyNDgzMzAsImV4cCI6MjA2MjgyNDMzMH0.O7E_H25eq3aetfwkegTWoG9qkJhsBDnWmRmIMxFQ-OA';
 
-const SERVICE_KEY = import.meta.env?.VITE_SUPABASE_SERVICE_KEY || 
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bWpwaGx0dXlmYnB5cm5ldmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzIyOTMwNSwiZXhwIjoyMDYyODA1MzA1fQ.LXilXr4H0Hzs3KeEqJPZlS4iJKrr4_GUP7FmPUJvp7c';
+const SERVICE_KEY = STORED_SERVICE_KEY || import.meta.env?.VITE_SUPABASE_SERVICE_KEY || 
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnZXFncmpidXRkZ2l6Y3Rod2t2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzI0ODMzMCwiZXhwIjoyMDYyODI0MzMwfQ.U6G67Wn1TcOTFdrqTFJJ7JeTLuz2xmpB7evJ1bCraUY';
 
 // Función para decodificar base64url de manera segura en navegador
 const base64UrlDecode = (str: string): string => {
@@ -78,7 +80,16 @@ const supabase = createClient(SUPABASE_URL, ANON_KEY);
 export const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: {
     autoRefreshToken: false,
-    persistSession: false
+    persistSession: false,
+    detectSessionInUrl: false // Desactivar detección de sesión en URL para cliente admin
+  },
+  // Configuración específica para las APIs administrativas
+  global: {
+    // Asegurar que el token se pasa en todos los headers como apikey
+    headers: {
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      apikey: SERVICE_KEY
+    }
   }
 });
 
@@ -102,5 +113,21 @@ Object.defineProperty(supabaseAdmin, 'toString', {
 console.log(`Supabase configurado para: ${SUPABASE_URL}`);
 console.log(`Cliente anónimo inicializado: ${validateKey(ANON_KEY, 'anon') ? 'OK' : 'ERROR'}`);
 console.log(`Cliente admin inicializado: ${validateKey(SERVICE_KEY, 'service_role') ? 'OK' : 'ERROR'}`);
+
+// Verificar que el cliente admin está correctamente configurado
+console.log("Cliente admin inicializado con rol:", validateKey(SERVICE_KEY, 'service_role') ? 'service_role' : 'ERROR');
+
+// Verificar que el cliente tenga permisos para acceder a la API de admin si no estamos en el instalador
+if (window.location.pathname !== '/instalador') {
+  supabaseAdmin.auth.admin.listUsers().then(({ data, error }) => {
+    if (error) {
+      console.error("ERROR: El cliente admin no tiene permisos para acceder a la API de admin:", error.message);
+    } else {
+      console.log("Cliente admin verificado: Acceso a API de admin funcionando correctamente");
+    }
+  }).catch(err => {
+    console.error("ERROR crítico con cliente admin:", err.message);
+  });
+}
 
 export default supabase; 

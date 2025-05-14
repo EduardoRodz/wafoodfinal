@@ -4,7 +4,7 @@ import { useCart } from '../context/CartContext';
 import { Plus, Minus } from 'lucide-react';
 import { Button } from './ui/button';
 import { formatCurrency } from '../utils/formatCurrency';
-import { config } from '../config';
+import { defaultConfig } from '../config';
 
 interface OrderItemProps {
   item: MenuItem;
@@ -105,7 +105,7 @@ const OrderItem: React.FC<OrderItemProps> = ({ item }) => {
             onClick={handleAddToCart} 
             className="w-full text-white flex items-center justify-center gap-1 py-1 text-sm"
             style={{ 
-              backgroundColor: tempQuantity > 0 ? config.theme.cartButtonColor : 'black',
+              backgroundColor: tempQuantity > 0 ? defaultConfig.theme.cartButtonColor : 'black',
             }}
             disabled={tempQuantity === 0}
           >

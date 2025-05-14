@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Edit, Trash, Plus, Check, X, Image } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Edit, Trash, Plus, Check, X, Image, ChevronUp, ChevronDown, Upload } from 'lucide-react';
+import { uploadImage } from '../../services/imageService';
 
 interface MenuItem {
   id: string;
@@ -32,6 +33,9 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
     price: 0,
     image: 'https://placehold.co/300x200/jpeg'
   });
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Encontrar la categoría seleccionada
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
@@ -79,6 +83,7 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
   const handleCancel = () => {
     setEditingItemIndex(null);
     setShowAddForm(false);
+    setUploadError(null);
   };
 
   const handleSave = () => {
@@ -145,6 +150,63 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
     });
   };
 
+  const handleMoveItem = (index: number, direction: 'up' | 'down') => {
+    if (!selectedCategory) return;
+    
+    // No hacer nada si intenta mover el primer elemento hacia arriba o el último hacia abajo
+    if ((direction === 'up' && index === 0) || 
+        (direction === 'down' && index === selectedCategory.items.length - 1)) {
+      return;
+    }
+    
+    const updatedCategories = [...categories];
+    const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
+    
+    if (categoryIndex === -1) return;
+    
+    const items = [...updatedCategories[categoryIndex].items];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // Intercambiar elementos
+    [items[index], items[newIndex]] = [items[newIndex], items[index]];
+    
+    updatedCategories[categoryIndex].items = items;
+    onChange(updatedCategories);
+  };
+
+  // Función para manejar la subida de imágenes
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    setUploadError(null);
+    
+    try {
+      const result = await uploadImage(file);
+      
+      // Actualizar el estado con la URL de la imagen
+      setNewItem({ ...newItem, image: result.url });
+      
+    } catch (error: any) {
+      console.error('Error al subir imagen:', error);
+      setUploadError(error.message || 'Error al subir la imagen');
+    } finally {
+      setIsUploading(false);
+      // Limpiar el input para permitir seleccionar el mismo archivo
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Función para abrir el selector de archivos
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">Editor de Platos</h2>
@@ -178,6 +240,14 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
                 <Plus size={16} /> Añadir Plato
               </button>
             )}
+          </div>
+
+          {/* Instrucciones de ordenamiento */}
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+            <p className="flex items-center">
+              <span className="mr-2">ℹ️</span>
+              <span>Ahora puedes cambiar el orden de los platos usando los botones <ChevronUp size={14} className="inline mx-1" /> y <ChevronDown size={14} className="inline mx-1" /> en la columna "Orden / Acciones". El orden en que aparecen aquí será el mismo que verán los clientes en el menú.</span>
+            </p>
           </div>
 
           {/* Formulario para añadir/editar */}
@@ -238,16 +308,43 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
                 </div>
                 
                 <div>
-                  <label className="block text-sm mb-1">URL de Imagen</label>
-                  <input
-                    type="text"
-                    value={newItem.image}
-                    onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    placeholder="https://ejemplo.com/imagen.jpg"
-                  />
+                  <label className="block text-sm mb-1">Imagen</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={newItem.image}
+                      onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
+                      className="flex-1 p-2 border border-gray-300 rounded"
+                      placeholder="https://ejemplo.com/imagen.jpg"
+                    />
+                    <button
+                      onClick={triggerFileInput}
+                      disabled={isUploading}
+                      className="flex items-center gap-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      type="button"
+                    >
+                      {isUploading ? (
+                        <span>Subiendo...</span>
+                      ) : (
+                        <>
+                          <Upload size={16} /> Subir
+                        </>
+                      )}
+                    </button>
+                    {/* Input oculto para la carga de archivos */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+                  {uploadError && (
+                    <p className="text-xs text-red-500 mt-1">{uploadError}</p>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">
-                    Ingresa la URL completa de la imagen.
+                    Ingresa la URL de una imagen o sube una desde tu dispositivo.
                   </p>
                 </div>
                 
@@ -309,7 +406,7 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
                     Precio
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
+                    Orden / Acciones
                   </th>
                 </tr>
               </thead>
@@ -340,18 +437,39 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
                         <div className="text-sm text-gray-900">{item.price.toFixed(2)}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button 
-                          onClick={() => handleEdit(index)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-3"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(index)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash size={16} />
-                        </button>
+                        <div className="flex items-center justify-end space-x-2">
+                          <div className="flex flex-col">
+                            <button 
+                              onClick={() => handleMoveItem(index, 'up')}
+                              disabled={index === 0}
+                              className={`text-gray-600 hover:text-gray-900 ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              title="Mover arriba"
+                            >
+                              <ChevronUp size={16} />
+                            </button>
+                            <span className="text-xs text-center text-gray-500">{index + 1}</span>
+                            <button 
+                              onClick={() => handleMoveItem(index, 'down')}
+                              disabled={index === menuItems.length - 1}
+                              className={`text-gray-600 hover:text-gray-900 ${index === menuItems.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              title="Mover abajo"
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+                          <button 
+                            onClick={() => handleEdit(index)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(index)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <Trash size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

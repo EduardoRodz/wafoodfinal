@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limpiar Instalación de WaFood</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #004d2a;
+      text-align: center;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin: 20px 0;
+    }
+    .warning {
+      background-color: #fff5f5;
+      border-left: 4px solid #f56565;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .info {
+      background-color: #ebf8ff;
+      border-left: 4px solid #4299e1;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .success {
+      background-color: #f0fff4;
+      border-left: 4px solid #48bb78;
+      padding: 10px 15px;
+      margin: 15px 0;
+      display: none;
+    }
+    button {
+      background-color: #004d2a;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      display: block;
+      margin: 20px auto;
+    }
+    button:hover {
+      background-color: #00873e;
+    }
+    #status {
+      text-align: center;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+    #home-button {
+      display: none;
+      background-color: #003b29;
+    }
+  </style>
+</head>
+<body>
+  <h1>Limpieza de Instalación de WaFood</h1>
+  
+  <div class="card">
+    <div class="warning">
+      <strong>Advertencia:</strong> Este proceso eliminará por completo la configuración actual de la aplicación. 
+      Tendrás que volver a configurar todo el sistema desde cero, incluyendo:
+      <ul>
+        <li>Conexión con Supabase</li>
+        <li>Datos del restaurante</li>
+        <li>Usuario administrador</li>
+      </ul>
+    </div>
+    
+    <p>Esta herramienta te permite reiniciar completamente la instalación de WaFood, eliminando todos los datos guardados localmente.</p>
+    
+    <div class="info">
+      <strong>Nota:</strong> Esta limpieza solo afecta a la configuración guardada en este navegador. 
+      Los datos en Supabase (pedidos, usuarios, etc.) no serán eliminados.
+    </div>
+    
+    <button id="clean-button">Limpiar Instalación</button>
+    
+    <div id="success-message" class="success">
+      <strong>¡Instalación limpiada correctamente!</strong>
+      <p>Todos los datos de configuración han sido eliminados. Ahora puedes reiniciar el proceso de instalación.</p>
+    </div>
+    
+    <div id="status"></div>
+    
+    <button id="home-button">Ir al Instalador</button>
+  </div>
+  
+  <script>
+    document.getElementById('clean-button').addEventListener('click', function() {
+      try {
+        // Lista de claves a eliminar
+        const keysToRemove = [
+          'installerCompleted',
+          'supabaseUrl',
+          'supabaseAnonKey',
+          'supabaseServiceKey',
+          'siteConfig'
+        ];
+        
+        // Eliminar cada clave
+        keysToRemove.forEach(key => {
+          localStorage.removeItem(key);
+          document.getElementById('status').innerHTML += `✅ Eliminado: ${key}<br>`;
+        });
+        
+        // Mostrar mensaje de éxito
+        document.getElementById('success-message').style.display = 'block';
+        document.getElementById('clean-button').style.display = 'none';
+        document.getElementById('home-button').style.display = 'block';
+        
+      } catch (error) {
+        document.getElementById('status').innerHTML = `❌ Error al limpiar la instalación: ${error.message}`;
+      }
+    });
+    
+    document.getElementById('home-button').addEventListener('click', function() {
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html> 

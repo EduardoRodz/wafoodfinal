@@ -52,7 +52,7 @@ const ForgotPassword: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: config.theme.backgroundColor }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#FFFFFF" }}>
       <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
         <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: config.theme.primaryColor }}>
           Recuperar Contraseña

@@ -1,5 +1,5 @@
 import React from 'react';
-import { config } from '../../config';
+import { defaultConfig } from '../../config';
 
 interface CashPaymentProps {
   cashAmount: number;
@@ -18,7 +18,7 @@ export const CashPayment: React.FC<CashPaymentProps> = ({
         onChange={(e) => setCashAmount(Number(e.target.value))}
         className="w-full p-2 border border-gray-300 rounded"
       >
-        {config.cashDenominations.map((denom) => (
+        {defaultConfig.cashDenominations.map((denom) => (
           <option key={denom.value} value={denom.value}>
             {denom.label}
           </option>

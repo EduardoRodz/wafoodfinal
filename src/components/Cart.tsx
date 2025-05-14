@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { useToast } from '../hooks/use-toast';
 import OrderForm from './OrderForm';
 import { SheetClose } from './ui/sheet';
-import { config } from '../config';
+import { defaultConfig } from '../config';
 
 const Cart: React.FC = () => {
   const { items, totalAmount, clearCart, addToCart, removeFromCart, removeItemCompletely } = useCart();
@@ -169,7 +169,7 @@ const Cart: React.FC = () => {
       <Button 
         className="w-full text-white font-medium py-6 flex items-center justify-center gap-2 rounded-lg shadow-md hover:shadow-lg transition-all"
         onClick={handleContinueOrder}
-        style={{ backgroundColor: config.theme.cartButtonColor }}
+        style={{ backgroundColor: defaultConfig.theme.cartButtonColor }}
       >
         <ShoppingCart size={20} /> Continuar con el pedido
       </Button>

@@ -122,3 +122,77 @@ El sistema implementa dos roles de usuario:
 - **Staff:** Acceso limitado solo a las secciones de menú y categorías
 
 El usuario eduardorweb@gmail.com siempre tiene rol de administrador por configuración.
+
+# Sistema de Pedidos - Configuración
+
+## Correos electrónicos y confirmación de usuarios
+
+### Problema: Los enlaces de confirmación no llegan al correo electrónico
+
+Si los usuarios reportan problemas con los enlaces de confirmación que no llegan a sus correos electrónicos, hay varias causas posibles:
+
+1. **Servicio de correo limitado**: Supabase incluye un servicio de correo para pruebas, pero tiene un límite de 2 correos por hora. En producción, recomendamos configurar un servidor SMTP personalizado.
+
+2. **Carpeta de Spam**: Los correos automáticos a menudo son filtrados como spam. Pida a los usuarios que revisen sus carpetas de spam o correo no deseado.
+
+3. **Firewall de correo**: Algunos servicios corporativos de correo bloquean correos con ciertos enlaces o palabras clave.
+
+### Solución: Reenviar enlaces de confirmación
+
+La aplicación proporciona una opción para reenviar el correo de confirmación desde la pantalla de inicio de sesión. Los usuarios pueden:
+
+1. Hacer clic en "¿No recibiste el correo de confirmación?" debajo del formulario de inicio de sesión
+2. Ingresar su correo electrónico
+3. Recibir un nuevo enlace de confirmación
+
+### Configuración de SMTP personalizado (recomendado para producción)
+
+Para una entrega más confiable, configure su propio servidor SMTP:
+
+1. Acceda al panel de control de Supabase
+2. Vaya a Authentication > Email Templates
+3. Configure su proveedor SMTP (SendGrid, Mailgun, Amazon SES, etc.)
+4. Personalice las plantillas de correo según sus necesidades
+
+## Solución de otros problemas comunes
+
+### Error "Invalid API Key"
+
+Si aparece el error "Invalid API key" al crear usuarios, verifique:
+
+1. Que esté utilizando la clave de servicio correcta (service_role) para operaciones administrativas
+2. Que las variables de entorno estén configuradas correctamente
+
+### Preguntas frecuentes
+
+**P: ¿Por qué algunos usuarios necesitan confirmar su correo y otros no?**
+R: Los usuarios creados por un administrador con el cliente de servicio (service_role) se confirman automáticamente. Los usuarios que se registran ellos mismos deben confirmar su correo.
+
+**P: ¿Puedo deshabilitar la confirmación por correo electrónico?**
+R: Sí, en el panel de Supabase bajo Authentication > Settings puede deshabilitar la confirmación de correo electrónico, pero esto reduce la seguridad.
+
+### Error de enlace expirado
+
+Si aparece el error **"Email link is invalid or has expired"** al usar un enlace de confirmación, hay varias soluciones:
+
+1. **Usar el enlace más rápido**: Los enlaces de confirmación caducan después de un tiempo (generalmente 24 horas). Usa el enlace lo antes posible.
+
+2. **Reenviar el enlace**: Usa la opción "¿No recibiste el correo de confirmación?" en la pantalla de inicio de sesión.
+
+3. **Verificar redirecciones**: Si estás usando diferentes dominios (local vs. producción), asegúrate de que todos estén configurados en el panel de Supabase:
+   - Ir a Authentication > URL Configuration
+   - Agregar tanto los dominios locales como los de producción:
+     ```
+     http://localhost:8081
+     http://localhost:3000
+     https://tudominio.com
+     ```
+
+4. **Actualizar la configuración de Supabase**: 
+   - Aumentar el tiempo de expiración de los enlaces
+   - Verificar que las URLs de redirección estén correctamente configuradas
+
+Para verificar la configuración, puedes ejecutar el script de diagnóstico:
+```
+node scripts/test-auth-setup.js
+```

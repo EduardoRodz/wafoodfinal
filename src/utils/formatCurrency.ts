@@ -16,7 +16,7 @@ export const formatCurrencyWithConfig = (value: number, currencySymbol: string):
 
 // Versión simple con la configuración importada
 // Utiliza la configuración actual, no se actualiza en tiempo real
-import { config } from '../config';
+import { defaultConfig } from '../config';
 export const formatCurrency = (value: number): string => {
-  return `${config.currency}${value.toFixed(2)}`;
+  return `${defaultConfig.currency}${value.toFixed(2)}`;
 };

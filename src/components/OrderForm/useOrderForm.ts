@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useCart } from '../../context/CartContext';
-import { config } from '../../config';
+import { defaultConfig } from '../../config';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { useToast } from '@/hooks/use-toast';
 
@@ -13,7 +13,7 @@ export const useOrderForm = () => {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash'); // cash or transfer
-  const [cashAmount, setCashAmount] = useState(config.cashDenominations[0].value);
+  const [cashAmount, setCashAmount] = useState(defaultConfig.cashDenominations[0].value);
   const [comments, setComments] = useState('');
   const [formErrors, setFormErrors] = useState({
     name: false,
@@ -87,7 +87,7 @@ export const useOrderForm = () => {
     message += '¡Gracias por tu pedido! Lo estaremos preparando pronto.';
     
     // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${config.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${defaultConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
     
     // Open WhatsApp in a new tab
     window.open(whatsappUrl, '_blank');

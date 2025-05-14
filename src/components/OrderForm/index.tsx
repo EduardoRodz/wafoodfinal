@@ -6,7 +6,7 @@ import { CashPayment } from './CashPayment';
 import { AdditionalComments } from './AdditionalComments';
 import { SubmitButton } from './SubmitButton';
 import { useCart } from '../../context/CartContext';
-import { config } from '../../config';
+import { defaultConfig } from '../../config';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { useOrderForm } from './useOrderForm';
 

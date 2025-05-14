@@ -69,23 +69,64 @@ export const getUsers = async (): Promise<User[]> => {
 // Crear un nuevo usuario
 export const createUser = async (userData: CreateUserData): Promise<{ user: User | null; error: Error | null }> => {
   try {
-    // Crear usuario en autenticación usando el cliente de administración
+    console.log("Intentando crear usuario con cliente admin...");
+    console.log("Email:", userData.email, "Rol:", userData.role);
+    
+    // Verificamos que el cliente admin esté correctamente configurado
+    if (!supabaseAdmin) {
+      console.error("Cliente admin de Supabase no disponible");
+      throw new Error("Error de configuración: Cliente admin no disponible");
+    }
+    
+    // Verificar si tenemos acceso a la API de admin antes de intentar crear el usuario
+    try {
+      const testAccess = await supabaseAdmin.auth.admin.listUsers({ perPage: 1 });
+      if (testAccess.error) {
+        console.error("Error de acceso a API admin:", testAccess.error);
+        throw new Error("Error de autenticación: No se puede acceder a la API de administrador. Verifique que la clave de servicio sea correcta.");
+      } else {
+        console.log("Acceso a API admin confirmado, procediendo a crear usuario...");
+      }
+    } catch (accessError: any) {
+      console.error("Error verificando acceso a API admin:", accessError);
+      throw new Error(`Error de acceso: ${accessError.message || 'No se puede acceder a la API de administrador'}`);
+    }
+    
+    // Crear usuario con el cliente admin usando la clave de servicio
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: userData.password,
-      email_confirm: true
+      email_confirm: true // Auto-confirmar el email con el cliente admin
     });
     
     if (authError) {
+      console.error("Error al crear usuario con cliente admin:", authError);
+      
+      // Proporcionar mensajes de error más específicos
+      if (authError.message?.includes('Invalid API key')) {
+        throw new Error('Error de autenticación: La clave API de servicio es inválida. Contacte al administrador del sistema.');
+      }
+      
+      if (authError.message?.includes('service_role key required')) {
+        throw new Error('Error de autenticación: Se requiere una clave de servicio válida para crear usuarios. La clave actual no tiene privilegios de service_role.');
+      }
+      
+      if (authError.message?.includes('User already registered')) {
+        throw new Error(`El correo ${userData.email} ya está registrado. Utilice otro correo electrónico.`);
+      }
+      
+      // Error genérico si no coincide con ninguno de los anteriores
       throw authError;
     }
     
     if (!authData || !authData.user) {
-      throw new Error('No se pudo crear el usuario');
+      throw new Error('No se pudo crear el usuario. Respuesta vacía del servidor.');
     }
     
-    // Guardar rol en tabla personalizada
-    const { error: roleError } = await supabase
+    console.log('Usuario creado correctamente con cliente admin:', authData.user.email);
+    
+    // Guardar rol en tabla personalizada usando supabaseAdmin para asegurar permisos
+    const { error: roleError } = await supabaseAdmin
       .from('user_roles')
       .insert([{
         user_id: authData.user.id,
@@ -94,7 +135,7 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
     
     if (roleError) {
       console.error('Error al guardar rol del usuario:', roleError);
-      // No lanzamos error aquí para no bloquear la creación del usuario
+      // Continuamos aunque haya error en la asignación de rol para no perder el usuario creado
     }
     
     return {
@@ -107,7 +148,7 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
       },
       error: null
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al crear usuario:', error);
     return { user: null, error: error as Error };
   }

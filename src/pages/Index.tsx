@@ -19,14 +19,16 @@ const Index = () => {
       <div className="flex flex-col min-h-screen">
         <Header />
         
-        <main className="flex-grow mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-8 py-2 sm:py-6">
-          <CategoryMenu />
-          
-          <div className="grid grid-cols-1 gap-6">
-            <div>
-              {config.categories.map((category) => (
-                <CategorySection key={category.id} category={category} />
-              ))}
+        <main className="flex-grow w-full px-4 sm:px-6 md:px-8 py-2 sm:py-6">
+          <div className="max-w-7xl mx-auto w-full">
+            <CategoryMenu />
+            
+            <div className="grid grid-cols-1 gap-6">
+              <div>
+                {config.categories.map((category) => (
+                  <CategorySection key={category.id} category={category} />
+                ))}
+              </div>
             </div>
           </div>
         </main>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { config as defaultConfig } from '../config';
-import { ColorPicker, CategoryEditor, MenuItemEditor, GeneralSettings, UserManager } from '../components/admin';
-import { X, Save, LogOut, Users } from 'lucide-react';
+import { ColorPicker, CategoryEditor, MenuItemEditor, GeneralSettings, UserManager, SystemStatus } from '../components/admin';
+import { X, Save, LogOut, Users, AlertCircle } from 'lucide-react';
 import { useConfig } from '../context/ConfigContext';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentUserRole } from '../services/userService';
+import ResendConfirmation from '../components/admin/ResendConfirmation';
 
 // Tipo para nuestro archivo de configuración editable
 interface EditableConfig {
@@ -52,6 +53,7 @@ const AdminPanel: React.FC = () => {
   const [userRole, setUserRole] = useState<string>('staff');
   const [roleLoading, setRoleLoading] = useState(true);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [showResendForm, setShowResendForm] = useState(false);
 
   // Timeout para pantalla de carga
   useEffect(() => {
@@ -114,6 +116,21 @@ const AdminPanel: React.FC = () => {
   useEffect(() => {
     setEditableConfig(JSON.parse(JSON.stringify(config)));
   }, [config]);
+
+  // Añadir oyente para cambio de pestaña desde componentes hijos
+  useEffect(() => {
+    const handleSetActiveTab = (event: CustomEvent) => {
+      if (event.detail && typeof event.detail === 'string') {
+        setActiveTab(event.detail);
+      }
+    };
+    
+    window.addEventListener('setActiveTab', handleSetActiveTab as EventListener);
+    
+    return () => {
+      window.removeEventListener('setActiveTab', handleSetActiveTab as EventListener);
+    };
+  }, []);
 
   // Autenticar usuario con Supabase
   const handleLogin = async () => {
@@ -191,7 +208,7 @@ const AdminPanel: React.FC = () => {
   // Si está cargando, mostrar indicador
   if (loading || roleLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: config.theme.backgroundColor }}>
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "#FFFFFF" }}>
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-t-primary rounded-full animate-spin mx-auto mb-4" 
                style={{ borderTopColor: config.theme.primaryColor }}></div>
@@ -215,61 +232,72 @@ const AdminPanel: React.FC = () => {
     );
   }
 
-  // Página de login
-  if (!user) {
+  // Si no hay usuario logueado, mostrar página de login
+  if (!loading && !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: config.theme.backgroundColor }}>
-        <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
-          <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: config.theme.primaryColor }}>
-            Panel de Administración
-          </h1>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Correo electrónico</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#FFFFFF" }}>
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+            <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: config.theme.primaryColor }}>
+              Panel de Administración
+            </h1>
             
-            <div>
-              <label className="block text-sm font-medium mb-1">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            
-            {loginError && (
-              <p className="text-red-500 text-sm">{loginError}</p>
-            )}
-            
-            <button
-              onClick={handleLogin}
-              className="w-full py-2 px-4 text-white font-medium rounded"
-              style={{ backgroundColor: config.theme.primaryColor }}
-            >
-              Iniciar Sesión
-            </button>
-            
-            <div className="text-center mt-2">
-              <a 
-                href="/forgot-password" 
-                className="text-sm text-gray-600 hover:underline"
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Correo Electrónico</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              
+              {loginError && (
+                <div className="p-3 bg-red-100 text-red-700 rounded">
+                  {loginError}
+                </div>
+              )}
+              
+              <button
+                type="submit"
+                className="w-full py-2 px-4 text-white font-medium rounded"
+                style={{ backgroundColor: config.theme.primaryColor }}
               >
-                ¿Olvidaste tu contraseña?
-              </a>
-            </div>
+                Iniciar Sesión
+              </button>
+              
+              <div className="flex justify-between mt-2">
+                <a 
+                  href="/forgot-password" 
+                  className="text-sm text-gray-600 hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setShowResendForm(!showResendForm)}
+                  className="text-sm text-gray-600 hover:underline"
+                >
+                  {showResendForm ? 'Ocultar opciones' : '¿No recibiste el correo de confirmación?'}
+                </button>
+              </div>
+            </form>
           </div>
           
-          <div className="mt-4 text-center text-sm text-gray-500">
-            <p>Usa tus credenciales de Supabase para iniciar sesión</p>
-          </div>
+          {showResendForm && (
+            <ResendConfirmation themeColor={config.theme.primaryColor} />
+          )}
         </div>
       </div>
     );
@@ -277,7 +305,7 @@ const AdminPanel: React.FC = () => {
 
   // Panel principal de administración
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: config.theme.backgroundColor }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#FFFFFF" }}>
       {/* Header */}
       <header className="bg-white shadow-sm py-4 px-6 flex justify-between items-center sticky top-0 z-10">
         <h1 className="text-xl font-bold" style={{ color: config.theme.primaryColor }}>
@@ -372,6 +400,21 @@ const AdminPanel: React.FC = () => {
                            color: activeTab === 'users' ? config.theme.primaryColor : '' }}
                   >
                     Usuarios
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('system')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'system'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                    style={{ borderColor: activeTab === 'system' ? config.theme.primaryColor : 'transparent',
+                           color: activeTab === 'system' ? config.theme.primaryColor : '' }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <AlertCircle size={16} />
+                      <span>Sistema</span>
+                    </div>
                   </button>
                 </>
               )}
@@ -495,6 +538,12 @@ const AdminPanel: React.FC = () => {
             {activeTab === 'users' && userRole === 'admin' && (
               <UserManager
                 currentUserEmail={user.email}
+                themeColor={config.theme.primaryColor}
+              />
+            )}
+            
+            {activeTab === 'system' && userRole === 'admin' && (
+              <SystemStatus
                 themeColor={config.theme.primaryColor}
               />
             )}

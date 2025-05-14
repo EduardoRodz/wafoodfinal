@@ -18,7 +18,7 @@ interface UserManagerProps {
 const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | JSX.Element | null>(null);
   
   // Estado para formulario de creación/edición
   const [showForm, setShowForm] = useState(false);
@@ -32,6 +32,9 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
   
   // Estado para confirmación de eliminación
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  
+  // Estado para mostrar mensaje de éxito
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Cargar usuarios
   const loadUsers = async () => {
@@ -102,9 +105,52 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
         }
       } else {
         // Crear usuario
+        console.log("Intentando crear usuario desde UserManager...");
         const { user, error } = await createUser(formData as CreateUserData);
+        
         if (!user && error) {
-          throw error;
+          // Formatear mensaje de error
+          let errorMessage = error.message || 'Error al crear usuario';
+          
+          // Detectar error específico de API key inválida
+          if (errorMessage.includes('Invalid API key') || 
+              errorMessage.includes('service_role') || 
+              errorMessage.includes('Error de autenticación')) {
+            setError(
+              <div>
+                <p className="font-semibold mb-2">Error de autenticación con Supabase:</p>
+                <p className="mb-2">{errorMessage}</p>
+                <p className="text-sm">
+                  Parece que hay un problema con la clave de servicio (service_role).
+                  <br />
+                  Consulta la{" "}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      // Intentar acceder a la función setActiveTab del padre
+                      const event = new CustomEvent('setActiveTab', { detail: 'system' });
+                      window.dispatchEvent(event);
+                      setShowForm(false);
+                    }}
+                    className="text-blue-600 underline font-medium"
+                  >
+                    pestaña de Sistema
+                  </button> para más información.
+                </p>
+              </div>
+            );
+            return;
+          }
+          
+          throw new Error(errorMessage);
+        } else if (user) {
+          // Mostrar un mensaje de éxito más informativo
+          setSaveSuccess(true);
+          // Verificar si el usuario fue creado con método alternativo (requiere confirmación)
+          // El ID de usuario es un UUID válido pero el usuario podría necesitar confirmar su correo
+          setTimeout(() => {
+            setSaveSuccess(false);
+          }, 5000);
         }
       }
       
@@ -112,6 +158,7 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
       await loadUsers();
       setShowForm(false);
     } catch (err: any) {
+      console.error('Error en formulario de usuario:', err);
       setError(err.message || 'Error al procesar el usuario');
     } finally {
       setLoading(false);
@@ -200,6 +247,13 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
                 Administrador: Acceso completo. Personal: Solo menú y categorías.
               </p>
             </div>
+            
+            {!isEditing && (
+              <div className="p-2 bg-yellow-50 text-yellow-700 rounded text-sm">
+                <p>Nota: Es posible que el usuario necesite confirmar su correo electrónico antes de poder iniciar sesión.</p>
+                <p>Si el correo de confirmación no llega, revise la carpeta de spam o intente nuevamente.</p>
+              </div>
+            )}
             
             {error && (
               <div className="p-2 bg-red-100 text-red-700 rounded text-sm">

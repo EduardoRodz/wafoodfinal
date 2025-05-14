@@ -28,7 +28,7 @@ export const defaultConfig = {
     primaryColor: "#004d2a", // Dark green
     accentColor: "#00873e", // Light green
     textColor: "#333333",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFFFF",
     cartButtonColor: "#003b29", // Added cart button color configuration
     floatingCartButtonColor: "#003b29", // Floating cart button color
   },
@@ -163,41 +163,46 @@ export const defaultConfig = {
       ],
     },
   ],
-
-  // Footer information
-  footerText: "© 2023 WHATSFOOD. Frescamente Cocinado para ti.",
 };
 
-// Intentar cargar la configuración desde localStorage o usar la predeterminada
-const loadConfig = () => {
+// Función para cargar configuración desde Supabase
+const loadConfig = async () => {
   try {
-    const savedConfig = localStorage.getItem('siteConfig');
-    if (savedConfig) {
-      return JSON.parse(savedConfig);
-    }
-  } catch (error) {
-    console.error('Error cargando configuración guardada:', error);
-  }
-  return defaultConfig;
-};
+    const { data, error } = await supabase
+      .from('site_config')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
 
-// Exportar la configuración activa
-export const config = loadConfig();
-
-// Función para guardar configuración
-export const saveConfig = (newConfig: typeof defaultConfig) => {
-  try {
-    localStorage.setItem('siteConfig', JSON.stringify(newConfig));
-    // Ya no necesitamos recargar la página ya que usamos el contexto y eventos
-    // window.location.reload();
+    if (error) throw error;
     
+    return data?.config || defaultConfig;
+  } catch (error) {
+    console.error('Error al cargar configuración:', error);
+    return defaultConfig;
+  }
+};
+
+// Función para guardar configuración en Supabase
+export const saveConfig = async (newConfig: typeof defaultConfig) => {
+  try {
+    const { error } = await supabase
+      .from('site_config')
+      .insert({ config: newConfig });
+
+    if (error) throw error;
+
     // Disparar un evento para informar a otros componentes
     const event = new CustomEvent('configSaved', { detail: newConfig });
     window.dispatchEvent(event);
     
     return true;
   } catch (error) {
-    console.error('Error guardando configuración:', error);
+    console.error('Error al guardar configuración:', error);
     return false;
   }
 };
+
+// Exportar la configuración activa (asíncrona)
+export const getConfig = loadConfig;

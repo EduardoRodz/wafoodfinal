@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Función exec_sql - WaFood</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #004d2a;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin: 20px 0;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #004d2a;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #00873e;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .success {
+      background-color: #f0fff4;
+      border-left: 4px solid #48bb78;
+    }
+    .error {
+      background-color: #fff5f5;
+      border-left: 4px solid #f56565;
+    }
+    #status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .sql-code {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      margin: 15px 0;
+      overflow-x: auto;
+    }
+    .info {
+      background-color: #ebf8ff;
+      border-left: 4px solid #4299e1;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .steps {
+      margin-top: 20px;
+    }
+    .step {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-left: 4px solid #4299e1;
+      background-color: #f8f9fb;
+    }
+    #success-message, #home-button {
+      display: none;
+    }
+    #home-button {
+      background-color: #003b29;
+    }
+  </style>
+</head>
+<body>
+  <h1>Crear Función exec_sql en Supabase</h1>
+  
+  <div class="card">
+    <div class="info">
+      <strong>¿Qué es esto?</strong> Esta página te ayudará a crear la función <code>exec_sql</code> que es necesaria para la instalación de WaFood. 
+      Esta función permite ejecutar comandos SQL dinámicamente desde la API, lo cual es esencial para configurar correctamente la base de datos.
+    </div>
+    
+    <h2>Método Automático</h2>
+    <p>Complete los campos a continuación para crear la función automáticamente:</p>
+    
+    <div class="input-group">
+      <label for="supabaseUrl">URL de Supabase:</label>
+      <input type="text" id="supabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co">
+    </div>
+    
+    <div class="input-group">
+      <label for="serviceKey">Clave de servicio (service_role key):</label>
+      <input type="password" id="serviceKey" placeholder="eyJhb...">
+      <small>Esta es la clave "service_role" que puedes encontrar en Configuración del Proyecto > API > Service Role Key</small>
+    </div>
+    
+    <button id="createButton">Crear Función exec_sql</button>
+    
+    <div id="status"></div>
+    
+    <div id="result" class="result" style="display: none;"></div>
+    
+    <div id="success-message" class="success">
+      <strong>¡Función exec_sql creada correctamente!</strong>
+      <p>Ahora puedes volver al instalador y continuar con la configuración.</p>
+    </div>
+    
+    <button id="home-button">Volver al Instalador</button>
+    
+    <h2>Método Manual</h2>
+    <p>Si el método automático no funciona, puedes crear la función manualmente siguiendo estos pasos:</p>
+    
+    <div class="steps">
+      <div class="step">
+        <strong>1. Copia el siguiente código SQL:</strong>
+        <div class="sql-code">
+CREATE OR REPLACE FUNCTION public.exec_sql(sql text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE sql;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.exec_sql(text) TO service_role;
+        </div>
+        <button id="copyButton">Copiar SQL</button>
+      </div>
+      
+      <div class="step">
+        <strong>2. Ve al SQL Editor de Supabase:</strong>
+        <p>Abre el dashboard de Supabase, ve a la sección "SQL Editor" y selecciona "New Query".</p>
+        <a href="https://app.supabase.com/" target="_blank">
+          <button style="background-color: #3182ce;">Ir a Supabase</button>
+        </a>
+      </div>
+      
+      <div class="step">
+        <strong>3. Pega el código SQL y ejecútalo:</strong>
+        <p>Pega el código SQL copiado en el editor y haz clic en "Run" (o presiona Ctrl+Enter / Cmd+Enter).</p>
+      </div>
+      
+      <div class="step">
+        <strong>4. Vuelve al instalador:</strong>
+        <p>Una vez creada la función, regresa al instalador para continuar con la configuración.</p>
+        <button onclick="window.location.href='/'">Volver al Instalador</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Almacenar los valores anteriores si existen
+    document.addEventListener('DOMContentLoaded', function() {
+      if (localStorage.getItem('supabaseUrl')) {
+        document.getElementById('supabaseUrl').value = localStorage.getItem('supabaseUrl');
+      }
+      if (localStorage.getItem('supabaseServiceKey')) {
+        document.getElementById('serviceKey').value = localStorage.getItem('supabaseServiceKey');
+      }
+    });
+    
+    // Botón para copiar SQL
+    document.getElementById('copyButton').addEventListener('click', function() {
+      const sqlCode = `CREATE OR REPLACE FUNCTION public.exec_sql(sql text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE sql;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.exec_sql(text) TO service_role;`;
+      
+      navigator.clipboard.writeText(sqlCode)
+        .then(() => {
+          this.textContent = '✅ Copiado!';
+          setTimeout(() => {
+            this.textContent = 'Copiar SQL';
+          }, 2000);
+        })
+        .catch(err => {
+          console.error('Error al copiar: ', err);
+          this.textContent = '❌ Error al copiar';
+          setTimeout(() => {
+            this.textContent = 'Copiar SQL';
+          }, 2000);
+        });
+    });
+    
+    // Crear la función exec_sql automáticamente
+    document.getElementById('createButton').addEventListener('click', async function() {
+      const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+      const serviceKey = document.getElementById('serviceKey').value.trim();
+      
+      if (!supabaseUrl || !serviceKey) {
+        document.getElementById('status').textContent = 'Por favor, complete todos los campos.';
+        return;
+      }
+      
+      // Guardar en localStorage
+      localStorage.setItem('supabaseUrl', supabaseUrl);
+      localStorage.setItem('supabaseServiceKey', serviceKey);
+      
+      document.getElementById('status').textContent = 'Creando función exec_sql...';
+      
+      // Construir la consulta SQL
+      const createExecSQL = `
+CREATE OR REPLACE FUNCTION public.exec_sql(sql text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE sql;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.exec_sql(text) TO service_role;`;
+      
+      try {
+        // Endpoint de SQL REST API de Supabase
+        const sqlEndpoint = `${supabaseUrl}/rest/v1/`;
+        
+        // Ejecutar directamente la query SQL
+        const sqlResponse = await fetch(`${sqlEndpoint}sql`, {
+          method: 'POST',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=ignore-duplicates,return=minimal'
+          },
+          body: JSON.stringify({
+            query: createExecSQL
+          })
+        });
+        
+        const resultElement = document.getElementById('result');
+        
+        if (!sqlResponse.ok) {
+          const errorText = await sqlResponse.text();
+          console.error('Error:', errorText);
+          
+          resultElement.className = 'result error';
+          resultElement.textContent = `Error: ${errorText}`;
+          document.getElementById('status').textContent = '❌ Error al crear la función exec_sql.';
+          
+          // Intentar extraer información útil del error
+          if (errorText.includes('permission denied')) {
+            resultElement.textContent += '\n\nParece que hay un problema de permisos. Asegúrate de estar usando la clave service_role correcta.';
+          }
+        } else {
+          resultElement.className = 'result success';
+          resultElement.textContent = 'Función exec_sql creada correctamente.';
+          document.getElementById('status').textContent = '✅ Función exec_sql creada con éxito.';
+          
+          // Mostrar mensaje de éxito y botón para volver
+          document.getElementById('success-message').style.display = 'block';
+          document.getElementById('home-button').style.display = 'block';
+          document.getElementById('createButton').style.display = 'none';
+        }
+        
+        resultElement.style.display = 'block';
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('result').className = 'result error';
+        document.getElementById('result').textContent = `Error: ${error.message || 'Desconocido'}`;
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('status').textContent = '❌ Error al conectar con Supabase.';
+      }
+    });
+    
+    // Volver al instalador
+    document.getElementById('home-button').addEventListener('click', function() {
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html> 

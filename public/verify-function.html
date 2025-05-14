@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificar Función NOW() - WaFood</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #004d2a;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin: 20px 0;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #004d2a;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #00873e;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .success {
+      background-color: #f0fff4;
+      border-left: 4px solid #48bb78;
+    }
+    .error {
+      background-color: #fff5f5;
+      border-left: 4px solid #f56565;
+    }
+    #status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .sql-code {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      margin: 15px 0;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Verificación de Funciones de Supabase</h1>
+  
+  <div class="card">
+    <h2>Verificar función NOW()</h2>
+    <p>Esta herramienta verifica si la función NOW() está correctamente instalada en su base de datos Supabase.</p>
+    
+    <div class="input-group">
+      <label for="supabaseUrl">URL de Supabase:</label>
+      <input type="text" id="supabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co">
+    </div>
+    
+    <div class="input-group">
+      <label for="supabaseAnonKey">Clave Anónima (anon):</label>
+      <input type="password" id="supabaseAnonKey">
+    </div>
+    
+    <button id="verifyButton">Verificar NOW()</button>
+    
+    <div id="status"></div>
+    
+    <div id="nowResult" class="result" style="display: none;"></div>
+    
+    <div id="fixSection" style="display: none;">
+      <h3>Solución:</h3>
+      <p>Si la función NOW() no está disponible, puede crear esta función ejecutando el siguiente código SQL en el SQL Editor de Supabase:</p>
+      
+      <div class="sql-code">
+CREATE OR REPLACE FUNCTION now()
+RETURNS TIMESTAMPTZ AS $$
+BEGIN
+  RETURN CURRENT_TIMESTAMP;
+END;
+$$ LANGUAGE plpgsql;
+      </div>
+      
+      <button id="copyButton">Copiar SQL</button>
+      <a href="https://app.supabase.com" target="_blank">
+        <button style="background-color: #3182ce;">Ir a Supabase</button>
+      </a>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h2>Verificar estructura de la base de datos</h2>
+    <p>Esta herramienta verifica si las tablas necesarias están correctamente configuradas en su base de datos Supabase.</p>
+    
+    <button id="checkTablesButton">Verificar Tablas</button>
+    
+    <div id="tablesStatus"></div>
+    
+    <div id="tablesResult" class="result" style="display: none;"></div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Cargar valores guardados en localStorage si existen
+      if (localStorage.getItem('supabaseUrl')) {
+        document.getElementById('supabaseUrl').value = localStorage.getItem('supabaseUrl');
+      }
+      if (localStorage.getItem('supabaseAnonKey')) {
+        document.getElementById('supabaseAnonKey').value = localStorage.getItem('supabaseAnonKey');
+      }
+      
+      // Verificar función NOW()
+      document.getElementById('verifyButton').addEventListener('click', async function() {
+        const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+        const supabaseAnonKey = document.getElementById('supabaseAnonKey').value.trim();
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          document.getElementById('status').textContent = 'Por favor, complete todos los campos.';
+          return;
+        }
+        
+        document.getElementById('status').textContent = 'Verificando...';
+        
+        try {
+          const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+          const { data, error } = await supabase.rpc('now');
+          
+          const resultElement = document.getElementById('nowResult');
+          
+          if (error) {
+            console.error('Error:', error);
+            resultElement.className = 'result error';
+            resultElement.textContent = `Error: ${error.message || 'Desconocido'}`;
+            document.getElementById('status').textContent = '❌ La función NOW() no está disponible.';
+            document.getElementById('fixSection').style.display = 'block';
+          } else {
+            resultElement.className = 'result success';
+            resultElement.textContent = `Éxito: La función NOW() devolvió: ${data}`;
+            document.getElementById('status').textContent = '✅ La función NOW() está correctamente configurada.';
+          }
+          
+          resultElement.style.display = 'block';
+        } catch (error) {
+          console.error('Error:', error);
+          document.getElementById('nowResult').className = 'result error';
+          document.getElementById('nowResult').textContent = `Error: ${error.message || 'Desconocido'}`;
+          document.getElementById('nowResult').style.display = 'block';
+          document.getElementById('status').textContent = '❌ Error al conectar con Supabase.';
+        }
+      });
+      
+      // Verificar tablas
+      document.getElementById('checkTablesButton').addEventListener('click', async function() {
+        const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+        const supabaseAnonKey = document.getElementById('supabaseAnonKey').value.trim();
+        
+        if (!supabaseUrl || !supabaseAnonKey) {
+          document.getElementById('tablesStatus').textContent = 'Por favor, complete los campos de conexión en la sección anterior.';
+          return;
+        }
+        
+        document.getElementById('tablesStatus').textContent = 'Verificando tablas...';
+        
+        try {
+          const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+          let results = '';
+          
+          // Verificar tabla profiles
+          const { error: profilesError } = await supabase.from('profiles').select('*').limit(1);
+          results += profilesError 
+            ? `❌ Tabla 'profiles': ${profilesError.message}\n` 
+            : '✅ Tabla profiles: Correcta\n';
+          
+          // Verificar tabla site_config
+          const { error: configError } = await supabase.from('site_config').select('*').limit(1);
+          results += configError 
+            ? `❌ Tabla 'site_config': ${configError.message}\n` 
+            : '✅ Tabla site_config: Correcta\n';
+          
+          // Verificar tabla orders
+          const { error: ordersError } = await supabase.from('orders').select('*').limit(1);
+          results += ordersError 
+            ? `❌ Tabla 'orders': ${ordersError.message}\n` 
+            : '✅ Tabla orders: Correcta\n';
+          
+          document.getElementById('tablesResult').textContent = results;
+          document.getElementById('tablesResult').style.display = 'block';
+          
+          if (profilesError || configError || ordersError) {
+            document.getElementById('tablesStatus').textContent = '❌ Faltan algunas tablas. Ejecute el script SQL completo.';
+          } else {
+            document.getElementById('tablesStatus').textContent = '✅ Todas las tablas están correctamente configuradas.';
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          document.getElementById('tablesResult').className = 'result error';
+          document.getElementById('tablesResult').textContent = `Error: ${error.message || 'Desconocido'}`;
+          document.getElementById('tablesResult').style.display = 'block';
+          document.getElementById('tablesStatus').textContent = '❌ Error al conectar con Supabase.';
+        }
+      });
+      
+      // Copiar SQL
+      document.getElementById('copyButton').addEventListener('click', function() {
+        const sqlText = document.querySelector('.sql-code').innerText;
+        navigator.clipboard.writeText(sqlText).then(function() {
+          this.textContent = '✅ Copiado!';
+          setTimeout(() => {
+            this.textContent = 'Copiar SQL';
+          }, 2000);
+        }.bind(this));
+      });
+    });
+  </script>
+</body>
+</html> 
