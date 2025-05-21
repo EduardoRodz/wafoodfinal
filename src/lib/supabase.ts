@@ -178,84 +178,98 @@ const loadCredentialsFromDatabase = async (): Promise<{ url: string, anonKey: st
   }
 };
 
-// Intentar cargar credenciales desde Supabase (si es posible)
+// Crear variables para los clientes y datos
+let supabase: any = null;
+let supabaseAdmin: any = null;
+let supabaseUrl: string | null = null;
+let serviceKey: string | null = null;
+let initialized = false;
 let supabaseCredentials: any = null;
 
-// Función para inicializar los clientes de Supabase
-const initializeSupabaseClients = async () => {
-  // Intentar cargar credenciales desde Supabase si tenemos credenciales iniciales
-  if (STORED_URL && STORED_ANON_KEY) {
-    supabaseCredentials = await loadCredentialsFromDatabase();
-  }
-  
-  // Usar las credenciales cargadas o las predeterminadas
-  const finalUrl = supabaseCredentials?.url || SUPABASE_URL;
-  const finalAnonKey = supabaseCredentials?.anonKey || ANON_KEY;
-  const finalServiceKey = supabaseCredentials?.serviceKey || SERVICE_KEY;
+// Función asíncrona para inicializar los clientes
+export const initializeSupabaseClients = async () => {
+  if (!initialized) {
+    // Intentar cargar credenciales desde Supabase si tenemos credenciales iniciales
+    if (STORED_URL && STORED_ANON_KEY) {
+      supabaseCredentials = await loadCredentialsFromDatabase();
+    }
+    // Usar las credenciales cargadas o las predeterminadas
+    const finalUrl = supabaseCredentials?.url || SUPABASE_URL;
+    const finalAnonKey = supabaseCredentials?.anonKey || ANON_KEY;
+    const finalServiceKey = supabaseCredentials?.serviceKey || SERVICE_KEY;
 
-// Validar claves antes de inicializar clientes
-  if (!validateKey(finalAnonKey, 'anon')) {
-  console.error('ERROR: La clave anónima no tiene el formato correcto o no contiene el rol "anon"');
-}
-
-  if (!validateKey(finalServiceKey, 'service_role')) {
-  console.error('ERROR: La clave de servicio no tiene el formato correcto o no contiene el rol "service_role"');
-}
-
-// Crear cliente estándar para operaciones regulares
-  const supabase = createClient(finalUrl, finalAnonKey);
-
-// Crear cliente con permisos administrativos (service_role)
-  const supabaseAdmin = createClient(finalUrl, finalServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-    detectSessionInUrl: false // Desactivar detección de sesión en URL para cliente admin
-  },
-  // Configuración específica para las APIs administrativas
-  global: {
-    // Asegurar que el token se pasa en todos los headers como apikey
-    headers: {
-        Authorization: `Bearer ${finalServiceKey}`,
-        apikey: finalServiceKey
+    // Validar claves antes de inicializar clientes
+    if (!validateKey(finalAnonKey, 'anon')) {
+      console.error('ERROR: La clave anónima no tiene el formato correcto o no contiene el rol "anon"');
+    }
+    if (!validateKey(finalServiceKey, 'service_role')) {
+      console.error('ERROR: La clave de servicio no tiene el formato correcto o no contiene el rol "service_role"');
+    }
+    // Crear cliente estándar para operaciones regulares
+    supabase = createClient(finalUrl, finalAnonKey);
+    // Crear cliente con permisos administrativos (service_role)
+    supabaseAdmin = createClient(finalUrl, finalServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false // Desactivar detección de sesión en URL para cliente admin
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${finalServiceKey}`,
+          apikey: finalServiceKey
+        }
+      }
+    });
+    // Proteger contra exposición accidental en consola
+    Object.defineProperty(supabase, 'toString', {
+      value: () => '[Objeto Supabase - Claves ocultas]',
+      writable: false
+    });
+    Object.defineProperty(supabaseAdmin, 'toString', {
+      value: () => '[Objeto SupabaseAdmin - Claves ocultas]',
+      writable: false
+    });
+    supabaseUrl = finalUrl;
+    serviceKey = finalServiceKey;
+    initialized = true;
+    // Log para confirmar inicialización
+    console.log(`Supabase configurado para: ${finalUrl}`);
+    console.log(`Cliente anónimo inicializado: ${validateKey(finalAnonKey, 'anon') ? 'OK' : 'ERROR'}`);
+    console.log(`Cliente admin inicializado: ${validateKey(finalServiceKey, 'service_role') ? 'OK' : 'ERROR'}`);
+    // Verificar que el cliente admin está correctamente configurado
+    if (window.location.pathname !== '/instalador') {
+      supabaseAdmin.auth.admin.listUsers().then(({ data, error }) => {
+        if (error) {
+          console.error("ERROR: El cliente admin no tiene permisos para acceder a la API de admin:", error.message);
+        } else {
+          console.log("Cliente admin verificado: Acceso a API de admin funcionando correctamente");
+        }
+      }).catch(err => {
+        console.error("ERROR crítico con cliente admin:", err.message);
+      });
     }
   }
-});
-
-// Proteger contra exposición accidental en consola
-Object.defineProperty(supabase, 'toString', {
-  value: () => '[Objeto Supabase - Claves ocultas]',
-  writable: false
-});
-
-Object.defineProperty(supabaseAdmin, 'toString', {
-  value: () => '[Objeto SupabaseAdmin - Claves ocultas]',
-  writable: false
-});
-
-// Log para confirmar inicialización
-  console.log(`Supabase configurado para: ${finalUrl}`);
-  console.log(`Cliente anónimo inicializado: ${validateKey(finalAnonKey, 'anon') ? 'OK' : 'ERROR'}`);
-  console.log(`Cliente admin inicializado: ${validateKey(finalServiceKey, 'service_role') ? 'OK' : 'ERROR'}`);
-  
-  return { supabase, supabaseAdmin, supabaseUrl: finalUrl, serviceKey: finalServiceKey };
+  return { supabase, supabaseAdmin, supabaseUrl, serviceKey };
 };
 
-// Crear clientes iniciales con las credenciales disponibles
-const { supabase, supabaseAdmin, supabaseUrl, serviceKey } = await initializeSupabaseClients();
-
-// Verificar que el cliente admin está correctamente configurado
-if (window.location.pathname !== '/instalador') {
-supabaseAdmin.auth.admin.listUsers().then(({ data, error }) => {
-  if (error) {
-    console.error("ERROR: El cliente admin no tiene permisos para acceder a la API de admin:", error.message);
-  } else {
-    console.log("Cliente admin verificado: Acceso a API de admin funcionando correctamente");
-  }
-}).catch(err => {
-  console.error("ERROR crítico con cliente admin:", err.message);
-});
-}
+// Funciones para obtener los clientes ya inicializados (lanzan error si no están listos)
+export const getSupabase = () => {
+  if (!initialized) throw new Error('Supabase no inicializado. Llama a initializeSupabaseClients primero.');
+  return supabase;
+};
+export const getSupabaseAdmin = () => {
+  if (!initialized) throw new Error('SupabaseAdmin no inicializado. Llama a initializeSupabaseClients primero.');
+  return supabaseAdmin;
+};
+export const getSupabaseUrl = () => {
+  if (!initialized) throw new Error('SupabaseUrl no inicializado. Llama a initializeSupabaseClients primero.');
+  return supabaseUrl;
+};
+export const getServiceKey = () => {
+  if (!initialized) throw new Error('ServiceKey no inicializado. Llama a initializeSupabaseClients primero.');
+  return serviceKey;
+};
 
 // Implementación del patrón Singleton para gestionar los clientes de Supabase
 class SupabaseManager {
@@ -307,10 +321,4 @@ export const getSupabaseManager = (): SupabaseManager => {
   return SupabaseManager.getInstance();
 };
 
-// Función para obtener la clave de servicio (necesaria para SystemStatus.tsx)
-export const getServiceKey = (): string => {
-  return serviceKey || SERVICE_KEY;
-};
-
-export { supabaseAdmin, supabaseUrl };
-export default supabase; 
+// Exportación por defecto eliminada para evitar confusión 
