@@ -1,4 +1,4 @@
-import supabase, { supabaseAdmin, getSupabaseManager } from '../lib/supabase';
+import { getSupabase, getSupabaseAdmin } from '../lib/supabase';
 
 // Nombre del bucket para imágenes del menú
 const MENU_IMAGES_BUCKET = 'menu-images';
@@ -16,8 +16,8 @@ export const initializeImageStorage = async () => {
 
   try {
     // Verificar primero si el cliente Supabase está inicializado
-    const supabaseManager = getSupabaseManager();
-    if (!supabaseManager.isInitialized()) {
+    const supabase = await getSupabase();
+    if (!supabase) {
       console.log('Cliente Supabase no inicializado, se omitirá la inicialización del bucket');
       return false;
     }
@@ -25,9 +25,7 @@ export const initializeImageStorage = async () => {
     console.log('Verificando bucket de imágenes de menú...');
     
     // Verificar si el bucket de imágenes existe
-    const { data: buckets, error: bucketsError } = await supabase
-      .storage
-      .listBuckets();
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     
     if (bucketsError) {
       // Si hay un error de autorización, lo manejamos silenciosamente
@@ -53,72 +51,73 @@ export const initializeImageStorage = async () => {
     
     console.log(`El bucket '${MENU_IMAGES_BUCKET}' no existe, intentando crearlo...`);
       
-      try {
+    try {
       // Crear el bucket para imágenes de menú
-      const { error: createError } = await supabaseAdmin
-        .storage
-        .createBucket(MENU_IMAGES_BUCKET, {
-          public: true,
-          fileSizeLimit: 5242880, // 5MB
-          allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-        });
+      const supabaseAdmin = await getSupabaseAdmin();
+      const { error: createError } = await supabaseAdmin.storage.createBucket(MENU_IMAGES_BUCKET, {
+        public: true,
+        fileSizeLimit: 5242880, // 5MB
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+      });
       
       if (createError) {
         // Si el error es que el recurso ya existe, es una condición de carrera y está bien
-          if (createError.message === 'The resource already exists') {
+        if (createError.message === 'The resource already exists') {
           console.log(`El bucket '${MENU_IMAGES_BUCKET}' ya existe (posible condición de carrera)`);
           bucketInitialized = true;
-            return true;
-          }
+          return true;
+        }
           
         // Si hay un error de autorización, continuamos con funcionalidad limitada
-          if (createError.message?.includes('apikey') || 
-              createError.message?.includes('401') ||
-              createError.message?.includes('400') ||
-              createError.message?.includes('unauthorized')) {
-            console.log('No se pudo crear el bucket por falta de permisos, la aplicación continuará con funcionalidad limitada');
+        if (createError.message?.includes('apikey') || 
+            createError.message?.includes('401') ||
+            createError.message?.includes('400') ||
+            createError.message?.includes('unauthorized')) {
+          console.log('No se pudo crear el bucket por falta de permisos, la aplicación continuará con funcionalidad limitada');
           return true;
-          }
+        }
           
         console.error(`Error al crear bucket '${MENU_IMAGES_BUCKET}':`, createError);
-          return true; // Seguir a pesar del error
+        return true; // Seguir a pesar del error
       }
       
       console.log(`Bucket '${MENU_IMAGES_BUCKET}' creado correctamente, configurando políticas...`);
       
       // Configurar políticas de acceso público para el bucket
-        try {
-      const bucketSQL = `
-        -- Política para permitir a todos los usuarios autenticados leer imágenes
+      try {
+        const bucketSQL = `
+          -- Política para permitir a todos los usuarios autenticados leer imágenes
           CREATE POLICY IF NOT EXISTS "Imágenes de menú accesibles públicamente" 
           ON storage.objects FOR SELECT 
             USING (bucket_id = '${MENU_IMAGES_BUCKET}');
 
-        -- Política para permitir a los administradores subir imágenes
+          -- Política para permitir a los administradores subir imágenes
           CREATE POLICY IF NOT EXISTS "Solo administradores pueden subir imágenes" 
           ON storage.objects FOR INSERT 
             WITH CHECK (bucket_id = '${MENU_IMAGES_BUCKET}' AND auth.jwt() ->> 'role' = 'admin');
 
-        -- Política para permitir a los administradores modificar imágenes
+          -- Política para permitir a los administradores modificar imágenes
           CREATE POLICY IF NOT EXISTS "Solo administradores pueden modificar imágenes" 
           ON storage.objects FOR UPDATE 
             USING (bucket_id = '${MENU_IMAGES_BUCKET}' AND auth.jwt() ->> 'role' = 'admin');
 
-        -- Política para permitir a los administradores eliminar imágenes
+          -- Política para permitir a los administradores eliminar imágenes
           CREATE POLICY IF NOT EXISTS "Solo administradores pueden eliminar imágenes" 
           ON storage.objects FOR DELETE 
             USING (bucket_id = '${MENU_IMAGES_BUCKET}' AND auth.jwt() ->> 'role' = 'admin');
-      `;
+        `;
 
-        const { error: sqlError } = await supabaseAdmin.rpc('exec_sql', { sql: bucketSQL });
+        const supabaseAdminForRpc = await getSupabaseAdmin();
+        const { error: sqlError } = await supabaseAdminForRpc.rpc('exec_sql', { sql: bucketSQL });
+        
         if (sqlError) {
-            console.log("Error al configurar políticas del bucket:", sqlError);
+          console.log("Error al configurar políticas del bucket:", sqlError);
         } else {
           console.log(`Políticas para el bucket '${MENU_IMAGES_BUCKET}' configuradas correctamente`);
         }
       } catch (sqlError) {
-          console.log("Error al ejecutar SQL para configurar bucket, continuando sin políticas:", sqlError);
-        }
+        console.log("Error al ejecutar SQL para configurar bucket, continuando sin políticas:", sqlError);
+      }
       
       bucketInitialized = true;
       return true;
@@ -142,8 +141,8 @@ export const uploadMenuImage = async (file: File, fileName: string): Promise<str
     
     const uniqueFileName = `${Date.now()}-${fileName}`;
     
-    const { data, error } = await supabaseAdmin
-      .storage
+    const supabaseAdmin = await getSupabaseAdmin();
+    const { data, error } = await supabaseAdmin.storage
       .from(MENU_IMAGES_BUCKET)
       .upload(uniqueFileName, file, {
         cacheControl: '3600',
@@ -156,8 +155,8 @@ export const uploadMenuImage = async (file: File, fileName: string): Promise<str
     }
     
     // Obtener la URL pública de la imagen
-    const { data: urlData } = supabaseAdmin
-      .storage
+    const supabaseAdminForUrl = await getSupabaseAdmin();
+    const { data: urlData } = supabaseAdminForUrl.storage
       .from(MENU_IMAGES_BUCKET)
       .getPublicUrl(data.path);
     
@@ -175,8 +174,8 @@ export const deleteMenuImage = async (imageUrl: string): Promise<boolean> => {
     const urlParts = imageUrl.split('/');
     const fileName = urlParts[urlParts.length - 1];
     
-    const { error } = await supabaseAdmin
-      .storage
+    const supabaseAdmin = await getSupabaseAdmin();
+    const { error } = await supabaseAdmin.storage
       .from(MENU_IMAGES_BUCKET)
       .remove([fileName]);
     

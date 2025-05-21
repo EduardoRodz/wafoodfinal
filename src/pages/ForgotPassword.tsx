@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import supabase from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 import { useConfig } from '../context/ConfigContext';
 
 const ForgotPassword: React.FC = () => {
@@ -24,6 +24,8 @@ const ForgotPassword: React.FC = () => {
     
     try {
       console.log("Enviando solicitud de restablecimiento para:", email);
+      
+      const supabase = await getSupabase();
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/reset-password',

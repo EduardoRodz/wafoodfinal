@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import supabase, { supabaseAdmin, getServiceKey } from '../../lib/supabase';
+import { getSupabaseAdmin, getSupabase, getServiceKey } from '../../lib/supabase';
 
 interface SystemStatusProps {
   themeColor: string;
@@ -24,22 +24,28 @@ const SystemStatus: React.FC<SystemStatusProps> = ({ themeColor }) => {
       setLoading(true);
       
       try {
+        // Obtener clientes Supabase
+        const supabase = await getSupabase();
+        const supabaseAdmin = await getSupabaseAdmin();
+        
         // Verificar cliente regular
         const regularCheck = await supabase.from('user_roles').select('count').limit(1);
         const regularAccess = !regularCheck.error;
         
         // Verificar token JWT
-        const serviceKey = getServiceKey();
+        const serviceKey = await getServiceKey();
         let serviceKeyValid = false;
         
         try {
-          const parts = serviceKey.split('.');
-          if (parts.length === 3) {
-            // Decodificar payload
-            const base64Payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-            const padding = '='.repeat((4 - base64Payload.length % 4) % 4);
-            const payload = JSON.parse(atob(base64Payload + padding));
-            serviceKeyValid = payload.role === 'service_role';
+          if (serviceKey) {
+            const parts = serviceKey.split('.');
+            if (parts.length === 3) {
+              // Decodificar payload
+              const base64Payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+              const padding = '='.repeat((4 - base64Payload.length % 4) % 4);
+              const payload = JSON.parse(atob(base64Payload + padding));
+              serviceKeyValid = payload.role === 'service_role';
+            }
           }
         } catch (e) {
           console.error('Error al validar clave de servicio:', e);

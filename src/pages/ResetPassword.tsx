@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import supabase from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 import { useConfig } from '../context/ConfigContext';
 
 interface AuthParams {
@@ -85,6 +85,8 @@ const ResetPassword: React.FC = () => {
       if (authParams) {
         console.log("Estableciendo sesión con tokens...");
         
+        const supabase = await getSupabase();
+        
         const { error: sessionError } = await supabase.auth.setSession({
           access_token: authParams.access_token,
           refresh_token: authParams.refresh_token || '',
@@ -102,6 +104,7 @@ const ResetPassword: React.FC = () => {
       
       // Actualizar la contraseña
       console.log("Actualizando contraseña...");
+      const supabase = await getSupabase();
       const { error } = await supabase.auth.updateUser({
         password: password,
       });
@@ -145,6 +148,7 @@ const ResetPassword: React.FC = () => {
     setMessage(null);
     
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/reset-password',
       });

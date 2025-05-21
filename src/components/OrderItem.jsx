@@ -92,7 +92,7 @@ function OrderItem({ item }) {
 
   // Cálculo de la proporción de aspecto para forzar 4:3 en la imagen
   const aspectRatioStyle = {
-    paddingBottom: '100%', // Cambio de 75% (4:3) a 100% (1:1) para hacerlo cuadrado
+    paddingBottom: '75%', // Proporción 4:3
   };
 
   return (
@@ -102,6 +102,7 @@ function OrderItem({ item }) {
            '--tw-shadow-colored': '0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color)',
            boxShadow: 'var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)'
          }}>
+      {/* Bloque de imagen principal */}
       <div className="w-full relative bg-gray-100" style={aspectRatioStyle}>
         <img 
           ref={imgRef}

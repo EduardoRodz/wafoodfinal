@@ -1,4 +1,4 @@
-import supabase, { supabaseAdmin } from '../lib/supabase';
+import { getSupabaseAdmin } from '../lib/supabase';
 import { config as defaultConfig } from '../config';
 
 // Interfaces para las tablas
@@ -81,6 +81,7 @@ export const getSiteConfig = async (): Promise<SiteConfig> => {
   try {
     // Intentar obtener la configuración de la base de datos
     console.log('Consultando site_config en Supabase...');
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data, error, count } = await supabaseAdmin
       .from('site_config')
       .select('*', { count: 'exact' })
@@ -100,25 +101,27 @@ export const getSiteConfig = async (): Promise<SiteConfig> => {
       return data[0] as SiteConfig;
     }
 
-    // Si no hay datos, devolver la configuración predeterminada
-    console.log('No se encontró configuración del sitio, usando valores predeterminados');
+    // Si no hay datos, devolver un objeto vacío sin valores predeterminados
+    console.log('No se encontró configuración del sitio en la base de datos');
     return {
-      restaurant_name: defaultConfig.restaurantName,
-      whatsapp_number: defaultConfig.whatsappNumber,
-      currency: defaultConfig.currency,
-      opening_hours: defaultConfig.openingHours,
-      installation_status: 'pending'
+      restaurant_name: '',
+      whatsapp_number: '',
+      currency: '',
+      opening_hours: '',
+      installation_status: 'pending',
+      footer_text: ''
     };
   } catch (error) {
     console.error('Error al cargar configuración del sitio:', error);
     
-    // En caso de error, devolver configuración predeterminada
+    // En caso de error, devolver un objeto vacío sin valores predeterminados
     return {
-      restaurant_name: defaultConfig.restaurantName,
-      whatsapp_number: defaultConfig.whatsappNumber,
-      currency: defaultConfig.currency,
-      opening_hours: defaultConfig.openingHours,
-      installation_status: 'pending'
+      restaurant_name: '',
+      whatsapp_number: '',
+      currency: '',
+      opening_hours: '',
+      installation_status: 'pending',
+      footer_text: ''
     };
   }
 };
@@ -129,10 +132,11 @@ export const saveSiteConfig = async (config: SiteConfig): Promise<boolean> => {
     console.log('Guardando configuración del sitio:', config);
     
     // Primero verificamos si ya existe algún registro
-    const { data: existingData, error: fetchError, count } = await supabaseAdmin
+    const supabaseAdmin = await getSupabaseAdmin();
+    const { data: existingData, error: fetchError } = await supabaseAdmin
       .from('site_config')
-      .select('id', { count: 'exact' })
-      .order('id', { ascending: true })
+      .select('*')
+      .order('id', { ascending: false })
       .limit(1);
     
     if (fetchError) {
@@ -145,17 +149,25 @@ export const saveSiteConfig = async (config: SiteConfig): Promise<boolean> => {
     // Si ya existe al menos un registro, lo actualizamos usando su ID
     if (existingData && existingData.length > 0) {
       console.log(`Actualizando registro existente con ID: ${existingData[0].id}`);
+      
+      // Preservar valores existentes y solo actualizar los proporcionados
+      const updatedConfig = {
+        ...existingData[0],
+        // Solo actualizar campos que no sean vacíos o undefined
+        restaurant_name: config.restaurant_name || existingData[0].restaurant_name,
+        whatsapp_number: config.whatsapp_number || existingData[0].whatsapp_number,
+        currency: config.currency || existingData[0].currency,
+        opening_hours: config.opening_hours || existingData[0].opening_hours,
+        installation_status: config.installation_status || existingData[0].installation_status,
+        footer_text: config.footer_text !== undefined ? config.footer_text : existingData[0].footer_text,
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('Configuración actualizada con preservación de datos:', updatedConfig);
+      
       const { data, error } = await supabaseAdmin
         .from('site_config')
-        .update({
-          restaurant_name: config.restaurant_name,
-          whatsapp_number: config.whatsapp_number,
-          currency: config.currency,
-          opening_hours: config.opening_hours,
-          installation_status: config.installation_status,
-          footer_text: config.footer_text,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatedConfig)
         .eq('id', existingData[0].id)
         .select();
       
@@ -188,6 +200,7 @@ export const saveSiteConfig = async (config: SiteConfig): Promise<boolean> => {
 export const getAppearanceConfig = async (): Promise<AppearanceConfig> => {
   try {
     console.log('Consultando appearance_config en Supabase...');
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data, error, count } = await supabaseAdmin
       .from('appearance_config')
       .select('*', { count: 'exact' })
@@ -199,35 +212,34 @@ export const getAppearanceConfig = async (): Promise<AppearanceConfig> => {
       throw error;
     }
 
-    // Mostrar diagnóstico
     console.log(`Registros encontrados en appearance_config: ${count || 0}`);
-
+    
     if (data && data.length > 0) {
       console.log('Configuración de apariencia cargada desde Supabase:', data[0]);
       return data[0] as AppearanceConfig;
     }
 
-    // Si no hay datos, devolver la configuración predeterminada
-    console.log('No se encontró configuración de apariencia, usando valores predeterminados');
+    // Si no hay datos, devolver un objeto vacío sin valores predeterminados
+    console.log('No se encontró configuración de apariencia en la base de datos');
     return {
-      primary_color: defaultConfig.theme.primaryColor,
-      accent_color: defaultConfig.theme.accentColor,
-      text_color: defaultConfig.theme.textColor,
-      background_color: defaultConfig.theme.backgroundColor,
-      cart_button_color: defaultConfig.theme.cartButtonColor,
-      floating_cart_button_color: defaultConfig.theme.floatingCartButtonColor
+      primary_color: '',
+      accent_color: '',
+      text_color: '',
+      background_color: '',
+      cart_button_color: '',
+      floating_cart_button_color: ''
     };
   } catch (error) {
     console.error('Error al cargar configuración de apariencia:', error);
     
-    // En caso de error, devolver configuración predeterminada
+    // En caso de error, devolver un objeto vacío sin valores predeterminados
     return {
-      primary_color: defaultConfig.theme.primaryColor,
-      accent_color: defaultConfig.theme.accentColor,
-      text_color: defaultConfig.theme.textColor,
-      background_color: defaultConfig.theme.backgroundColor,
-      cart_button_color: defaultConfig.theme.cartButtonColor,
-      floating_cart_button_color: defaultConfig.theme.floatingCartButtonColor
+      primary_color: '',
+      accent_color: '',
+      text_color: '',
+      background_color: '',
+      cart_button_color: '',
+      floating_cart_button_color: ''
     };
   }
 };
@@ -238,10 +250,11 @@ export const saveAppearanceConfig = async (config: AppearanceConfig): Promise<bo
     console.log('Guardando configuración de apariencia:', config);
     
     // Primero verificamos si ya existe algún registro
-    const { data: existingData, error: fetchError, count } = await supabaseAdmin
+    const supabaseAdmin = await getSupabaseAdmin();
+    const { data: existingData, error: fetchError } = await supabaseAdmin
       .from('appearance_config')
-      .select('id', { count: 'exact' })
-      .order('id', { ascending: true })
+      .select('*')
+      .order('id', { ascending: false })
       .limit(1);
     
     if (fetchError) {
@@ -254,17 +267,25 @@ export const saveAppearanceConfig = async (config: AppearanceConfig): Promise<bo
     // Si ya existe al menos un registro, lo actualizamos usando su ID
     if (existingData && existingData.length > 0) {
       console.log(`Actualizando configuración de apariencia existente con ID: ${existingData[0].id}`);
+      
+      // Preservar valores existentes y solo actualizar los proporcionados
+      const updatedConfig = {
+        ...existingData[0],
+        // Solo actualizar campos que no sean vacíos o undefined
+        primary_color: config.primary_color || existingData[0].primary_color,
+        accent_color: config.accent_color || existingData[0].accent_color,
+        text_color: config.text_color || existingData[0].text_color,
+        background_color: config.background_color || existingData[0].background_color,
+        cart_button_color: config.cart_button_color || existingData[0].cart_button_color,
+        floating_cart_button_color: config.floating_cart_button_color || existingData[0].floating_cart_button_color,
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('Configuración de apariencia actualizada con preservación de datos:', updatedConfig);
+      
       const { data, error } = await supabaseAdmin
         .from('appearance_config')
-        .update({
-          primary_color: config.primary_color,
-          accent_color: config.accent_color,
-          text_color: config.text_color,
-          background_color: config.background_color,
-          cart_button_color: config.cart_button_color,
-          floating_cart_button_color: config.floating_cart_button_color,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatedConfig)
         .eq('id', existingData[0].id)
         .select();
       
@@ -316,6 +337,7 @@ export const getMenuData = async () => {
     
     // 1. Obtener todas las categorías
     console.log('- Consultando tabla categories...');
+    const supabaseAdmin = await getSupabaseAdmin();
     cachedData.requestCounter.categories++;
     
     const { data: categoriesData, error: categoriesError, count: categoriesCount } = await supabaseAdmin
@@ -420,6 +442,7 @@ export const saveCategory = async (category: Category): Promise<boolean> => {
   try {
     // Usar directamente upsert con onConflict para manejar duplicados
     // en lugar de verificar primero si la categoría existe
+    const supabaseAdmin = await getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('categories')
       .upsert(category, { 
@@ -483,6 +506,7 @@ export const saveCategory = async (category: Category): Promise<boolean> => {
 export const saveMenuItem = async (menuItem: MenuItem): Promise<boolean> => {
   try {
     // Usar directamente upsert con onConflict para manejar duplicados
+    const supabaseAdmin = await getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('menu_items')
       .upsert(menuItem, { 
@@ -548,6 +572,7 @@ export const saveMenuItem = async (menuItem: MenuItem): Promise<boolean> => {
 // Eliminar una categoría
 export const deleteCategory = async (categoryId: string): Promise<boolean> => {
   try {
+    const supabaseAdmin = await getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('categories')
       .delete()
@@ -570,6 +595,7 @@ export const deleteCategory = async (categoryId: string): Promise<boolean> => {
 // Eliminar un plato
 export const deleteMenuItem = async (itemId: string): Promise<boolean> => {
   try {
+    const supabaseAdmin = await getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('menu_items')
       .delete()
@@ -742,54 +768,60 @@ export const saveConfig = async (newConfig: typeof defaultConfig): Promise<boole
   }
 };
 
-// Función para obtener la configuración completa
+// Función principal para obtener la configuración completa
 export const getConfig = async () => {
   try {
-    console.log('📋 Obteniendo configuración completa (con uso optimizado de caché)...');
-    logCacheStatus('CONFIG');
+    console.log('Iniciando carga de configuración completa...');
     
-    // 1. Obtener configuración del sitio
-    console.log('1️⃣ Cargando configuración del sitio...');
-    const siteConfig = await getSiteConfig();
+    // Obtener cada sección de la configuración
+    const [siteConfig, appearanceConfig, menu] = await Promise.all([
+      getSiteConfig(),
+      getAppearanceConfig(),
+      getMenuData()
+    ]);
     
-    // 2. Obtener configuración de apariencia
-    console.log('2️⃣ Cargando configuración de apariencia...');
-    const appearanceConfig = await getAppearanceConfig();
-    
-    // 3. Obtener categorías y platos - Usar caché si es posible
-    console.log('3️⃣ Cargando datos del menú (con caché si es posible)...');
-    // La función getMenuData ya implementa verificación de caché internamente
-    const menuData = await getMenuData();
-    
-    // Construir el objeto de configuración con el formato antiguo para mantener compatibilidad
+    // Combinar en un solo objeto de configuración, sin aplicar valores por defecto
     const config = {
-      restaurantName: siteConfig.restaurant_name,
-      whatsappNumber: siteConfig.whatsapp_number,
-      currency: siteConfig.currency,
-      openingHours: siteConfig.opening_hours,
-      footerText: siteConfig.footer_text || '', // Incluir el texto del footer
-      
+      restaurantName: siteConfig.restaurant_name || '',
+      whatsappNumber: siteConfig.whatsapp_number || '',
+      currency: siteConfig.currency || '',
+      openingHours: siteConfig.opening_hours || '',
+      footerText: siteConfig.footer_text || '',
       theme: {
-        primaryColor: appearanceConfig.primary_color,
-        accentColor: appearanceConfig.accent_color,
-        textColor: appearanceConfig.text_color,
-        backgroundColor: appearanceConfig.background_color,
-        cartButtonColor: appearanceConfig.cart_button_color,
-        floatingCartButtonColor: appearanceConfig.floating_cart_button_color
+        primaryColor: appearanceConfig.primary_color || '',
+        accentColor: appearanceConfig.accent_color || '',
+        textColor: appearanceConfig.text_color || '',
+        backgroundColor: appearanceConfig.background_color || '',
+        cartButtonColor: appearanceConfig.cart_button_color || '',
+        floatingCartButtonColor: appearanceConfig.floating_cart_button_color || ''
       },
-      
-      // Mantener las denominaciones de efectivo por defecto
-      cashDenominations: defaultConfig.cashDenominations,
-      
-      // Categorías y platos
-      categories: menuData
+      categories: menu || [],
+      installationStatus: siteConfig.installation_status
     };
     
-    console.log('✅ Configuración completa obtenida');
+    console.log('Configuración completa cargada con éxito');
     return config;
   } catch (error) {
-    console.error('❌ Error al obtener configuración completa:', error);
-    return defaultConfig;
+    console.error('Error al cargar la configuración completa:', error);
+    
+    // En caso de error, devolvemos un objeto vacío sin valores predeterminados
+    return {
+      restaurantName: '',
+      whatsappNumber: '',
+      currency: '',
+      openingHours: '',
+      footerText: '',
+      theme: {
+        primaryColor: '',
+        accentColor: '',
+        textColor: '',
+        backgroundColor: '',
+        cartButtonColor: '',
+        floatingCartButtonColor: ''
+      },
+      categories: [],
+      installationStatus: 'pending'
+    };
   }
 };
 
@@ -799,6 +831,7 @@ export const getInstallationStatus = async (): Promise<'pending' | 'completed'> 
     console.log('Verificando estado de instalación directamente en la base de datos...');
     
     // Verificar directamente en la base de datos usando supabaseAdmin
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('site_config')
       .select('installation_status')
@@ -859,6 +892,7 @@ export const getInstallationStatus = async (): Promise<'pending' | 'completed'> 
 export const markInstallationComplete = async (): Promise<boolean> => {
   try {
     // Obtener registro actual si existe
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data, error: selectError } = await supabaseAdmin
       .from('site_config')
       .select('*')
@@ -903,6 +937,7 @@ export const initializeDefaultData = async (): Promise<boolean> => {
     console.log('Verificando si se necesita inicializar datos predeterminados...');
     
     // 1. Verificar si hay datos en site_config
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data: siteData, count: siteCount } = await supabaseAdmin
       .from('site_config')
       .select('*', { count: 'exact' })
@@ -1009,6 +1044,7 @@ export const initializeDefaultData = async (): Promise<boolean> => {
 export const getSupabaseCredentials = async (): Promise<{ url: string, anonKey: string, serviceKey: string } | null> => {
   try {
     // Verificar si existe la tabla site_config y obtener las credenciales
+    const supabaseAdmin = await getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('site_config')
       .select('supabase_url, supabase_anon_key, supabase_service_key')

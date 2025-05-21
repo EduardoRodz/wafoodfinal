@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle, Download, FileUp, RefreshCw } from 'lucide-react';
-import { supabaseAdmin } from '../../lib/supabase';
+import { getSupabaseAdmin } from '../../lib/supabase';
 
 interface ImportExportDataProps {
   themeColor: string;
@@ -29,6 +29,9 @@ const ImportExportData: React.FC<ImportExportDataProps> = ({ themeColor }) => {
       setExporting(true);
       setExportError(null);
       setExportSuccess(false);
+      
+      // Obtener el cliente de Supabase Admin
+      const supabaseAdmin = await getSupabaseAdmin();
       
       // Objeto para almacenar todos los datos
       const exportData: Record<string, any[]> = {};
@@ -92,6 +95,9 @@ const ImportExportData: React.FC<ImportExportDataProps> = ({ themeColor }) => {
       setImporting(true);
       setImportError(null);
       setImportSuccess(false);
+      
+      // Obtener el cliente de Supabase Admin
+      const supabaseAdmin = await getSupabaseAdmin();
       
       // Leer el archivo
       const fileContent = await file.text();

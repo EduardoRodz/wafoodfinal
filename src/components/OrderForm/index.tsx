@@ -1,6 +1,7 @@
 import React from 'react';
 import { CustomerDetails } from './CustomerDetails';
 import { DeliveryDetails } from './DeliveryDetails';
+import { PickupDetails } from './PickupDetails';
 import { PaymentMethod } from './PaymentMethod';
 import { CashPayment } from './CashPayment';
 import { AdditionalComments } from './AdditionalComments';
@@ -50,6 +51,15 @@ const OrderForm: React.FC = () => {
               </div>
             )}
             
+            {orderType === 'pickup' && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <PickupDetails 
+                  phone={phone} 
+                  setPhone={setPhone} 
+                />
+              </div>
+            )}
+            
             <div className="mt-4 pt-4 border-t border-gray-100">
               <PaymentMethod 
                 paymentMethod={paymentMethod} 
@@ -66,14 +76,12 @@ const OrderForm: React.FC = () => {
               </div>
             )}
             
-            {orderType === 'delivery' && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <AdditionalComments 
-                  comments={comments} 
-                  setComments={setComments} 
-                />
-              </div>
-            )}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <AdditionalComments 
+                comments={comments} 
+                setComments={setComments} 
+              />
+            </div>
           </div>
           
           <div className="mt-4">

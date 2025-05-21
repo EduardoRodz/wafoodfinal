@@ -1,4 +1,4 @@
-import React, { useState, memo, useRef, useCallback } from 'react';
+import React, { useState, memo, useRef, useCallback, useEffect } from 'react';
 import { Trash, Plus, ChevronUp, ChevronDown, Edit, AlertTriangle, GripVertical } from 'lucide-react';
 import MenuItemForm from './MenuItemForm';
 import { v4 as uuidv4 } from 'uuid';
@@ -176,16 +176,36 @@ const SortableMenuItemCard = memo<{
 });
 SortableMenuItemCard.displayName = 'SortableMenuItemCard';
 
-const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange }) => {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(categories[0]?.id || '');
+const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories = [], onChange }) => {
+  // Verificamos si hay categorías disponibles primero
+  const hasCategories = Array.isArray(categories) && categories.length > 0;
+  
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
+    hasCategories ? categories[0]?.id || '' : ''
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
+  // Efecto para actualizar la categoría seleccionada si cambian las categorías
+  useEffect(() => {
+    if (Array.isArray(categories) && categories.length > 0) {
+      // Si la categoría seleccionada ya no existe, seleccionar la primera
+      if (!categories.some(cat => cat.id === selectedCategoryId)) {
+        setSelectedCategoryId(categories[0].id);
+      }
+    } else {
+      // Si no hay categorías, resetear la selección
+      setSelectedCategoryId('');
+    }
+  }, [categories, selectedCategoryId]);
+
   // Encontrar la categoría seleccionada
-  const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
+  const selectedCategory = hasCategories 
+    ? categories.find(cat => cat.id === selectedCategoryId) 
+    : undefined;
   const menuItems = selectedCategory?.items || [];
 
   // Configurar sensores para DnD

@@ -1,4 +1,4 @@
-import supabase from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 
 export interface LoginCredentials {
   email: string;
@@ -12,6 +12,8 @@ export interface AuthResponse {
 
 export const login = async ({ email, password }: LoginCredentials): Promise<AuthResponse> => {
   try {
+    const supabase = await getSupabase();
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -30,6 +32,8 @@ export const login = async ({ email, password }: LoginCredentials): Promise<Auth
 
 export const logout = async (): Promise<{ error: Error | null }> => {
   try {
+    const supabase = await getSupabase();
+    
     const { error } = await supabase.auth.signOut();
     
     if (error) {
@@ -50,6 +54,8 @@ export const getCurrentUser = async (): Promise<{ user: any | null, error: Error
       console.log('En la página del instalador, no se verificará el usuario');
       return { user: null, error: null };
     }
+    
+    const supabase = await getSupabase();
     
     // Verificar si hay una sesión almacenada antes de intentar obtener el usuario
     const { data: session } = await supabase.auth.getSession();
@@ -80,6 +86,7 @@ export const getCurrentUser = async (): Promise<{ user: any | null, error: Error
     console.error('Error obteniendo usuario actual:', error);
     // Intenta limpiar la sesión local en caso de error para prevenir futuros problemas
     try {
+      const supabase = await getSupabase();
       await supabase.auth.signOut({ scope: 'local' });
     } catch (signOutError) {
       console.error('Error adicional al intentar cerrar sesión:', signOutError);
@@ -95,6 +102,8 @@ export const isAuthenticated = async (): Promise<boolean> => {
 
 export const loginWithEmail = async (credentials: LoginCredentials) => {
   try {
+    const supabase = await getSupabase();
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email: credentials.email,
       password: credentials.password,
@@ -118,6 +127,8 @@ export const resendConfirmationEmail = async (email: string) => {
     const redirectUrl = `${baseUrl}/adminpanel`;
     
     console.log('URL de redirección:', redirectUrl);
+    
+    const supabase = await getSupabase();
     
     const { data, error } = await supabase.auth.resend({
       type: 'signup',

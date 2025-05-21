@@ -1,4 +1,4 @@
-import supabase, { supabaseAdmin } from '../lib/supabase';
+import { getSupabase, getSupabaseAdmin } from '../lib/supabase';
 
 export interface User {
   id: string;
@@ -24,6 +24,8 @@ export interface UpdateUserData {
 // Obtener todos los usuarios
 export const getUsers = async (): Promise<User[]> => {
   try {
+    const supabaseAdmin = await getSupabaseAdmin();
+    
     // Primero consultamos la tabla de autenticación para obtener todos los usuarios
     const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers();
     
@@ -69,61 +71,18 @@ export const getUsers = async (): Promise<User[]> => {
 // Crear un nuevo usuario
 export const createUser = async (userData: CreateUserData): Promise<{ user: User | null; error: Error | null }> => {
   try {
-    console.log("Intentando crear usuario con cliente admin...");
-    console.log("Email:", userData.email, "Rol:", userData.role);
+    const supabaseAdmin = await getSupabaseAdmin();
     
-    // Verificamos que el cliente admin esté correctamente configurado
-    if (!supabaseAdmin) {
-      console.error("Cliente admin de Supabase no disponible");
-      throw new Error("Error de configuración: Cliente admin no disponible");
-    }
-    
-    // Verificar si tenemos acceso a la API de admin antes de intentar crear el usuario
-    try {
-      const testAccess = await supabaseAdmin.auth.admin.listUsers({ perPage: 1 });
-      if (testAccess.error) {
-        console.error("Error de acceso a API admin:", testAccess.error);
-        throw new Error("Error de autenticación: No se puede acceder a la API de administrador. Verifique que la clave de servicio sea correcta.");
-      } else {
-        console.log("Acceso a API admin confirmado, procediendo a crear usuario...");
-      }
-    } catch (accessError: any) {
-      console.error("Error verificando acceso a API admin:", accessError);
-      throw new Error(`Error de acceso: ${accessError.message || 'No se puede acceder a la API de administrador'}`);
-    }
-    
-    // Crear usuario con el cliente admin usando la clave de servicio
+    // Crear usuario en autenticación
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: userData.password,
-      email_confirm: true // Auto-confirmar el email con el cliente admin
+      email_confirm: true
     });
     
     if (authError) {
-      console.error("Error al crear usuario con cliente admin:", authError);
-      
-      // Proporcionar mensajes de error más específicos
-      if (authError.message?.includes('Invalid API key')) {
-        throw new Error('Error de autenticación: La clave API de servicio es inválida. Contacte al administrador del sistema.');
-      }
-      
-      if (authError.message?.includes('service_role key required')) {
-        throw new Error('Error de autenticación: Se requiere una clave de servicio válida para crear usuarios. La clave actual no tiene privilegios de service_role.');
-      }
-      
-      if (authError.message?.includes('User already registered')) {
-        throw new Error(`El correo ${userData.email} ya está registrado. Utilice otro correo electrónico.`);
-      }
-      
-      // Error genérico si no coincide con ninguno de los anteriores
       throw authError;
     }
-    
-    if (!authData || !authData.user) {
-      throw new Error('No se pudo crear el usuario. Respuesta vacía del servidor.');
-    }
-    
-    console.log('Usuario creado correctamente con cliente admin:', authData.user.email);
     
     // Guardar rol en tabla personalizada usando supabaseAdmin para asegurar permisos
     const { error: roleError } = await supabaseAdmin
@@ -157,6 +116,9 @@ export const createUser = async (userData: CreateUserData): Promise<{ user: User
 // Actualizar un usuario existente
 export const updateUser = async (userData: UpdateUserData): Promise<{ success: boolean; error: Error | null }> => {
   try {
+    const supabaseAdmin = await getSupabaseAdmin();
+    const supabase = await getSupabase();
+    
     // Actualizar datos de autenticación si es necesario
     if (userData.email || userData.password) {
       const updateData: any = {};
@@ -218,6 +180,9 @@ export const updateUser = async (userData: UpdateUserData): Promise<{ success: b
 // Eliminar un usuario
 export const deleteUser = async (userId: string): Promise<{ success: boolean; error: Error | null }> => {
   try {
+    const supabaseAdmin = await getSupabaseAdmin();
+    const supabase = await getSupabase();
+    
     // Eliminar usuario de autenticación
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     
@@ -246,6 +211,8 @@ export const deleteUser = async (userId: string): Promise<{ success: boolean; er
 // Obtener el rol del usuario actual
 export const getCurrentUserRole = async (): Promise<string> => {
   try {
+    const supabase = await getSupabase();
+    
     // Intentar obtener el usuario autenticado
     console.log("Obteniendo usuario actual...");
     const { data: { user }, error: authError } = await supabase.auth.getUser();

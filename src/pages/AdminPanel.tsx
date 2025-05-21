@@ -5,12 +5,15 @@ import { useConfig } from '../context/ConfigContext';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentUserRole } from '../services/userService';
 import ResendConfirmation from '../components/admin/ResendConfirmation';
+import { 
+  ColorPicker, 
+  ModernColorPicker, 
+  CategoryEditor, 
+  MenuItemEditor 
+} from '../components/admin';
 
 // Lazy load de componentes para reducir el tamaño inicial de carga
 const GeneralSettings = lazy(() => import('../components/admin/GeneralSettings'));
-const ColorPicker = lazy(() => import('../components/admin/ColorPicker'));
-const CategoryEditor = lazy(() => import('../components/admin/CategoryEditor'));
-const MenuItemEditor = lazy(() => import('../components/admin/MenuItemEditor'));
 const UserManager = lazy(() => import('../components/admin/UserManager'));
 const SystemStatus = lazy(() => import('../components/admin/SystemStatus'));
 const ImportExportData = lazy(() => import('../components/admin/ImportExportData'));
@@ -48,6 +51,25 @@ interface EditableConfig {
   footerText: string;
 }
 
+// Configuración mínima para inicialización (sin valores por defecto)
+const fallbackConfig: EditableConfig = {
+  restaurantName: "",
+  whatsappNumber: "",
+  currency: "",
+  openingHours: "",
+  theme: {
+    primaryColor: "",
+    accentColor: "",
+    textColor: "",
+    backgroundColor: "",
+    cartButtonColor: "",
+    floatingCartButtonColor: ""
+  },
+  cashDenominations: [],
+  categories: [],
+  footerText: ""
+};
+
 // Componente de carga para usar con Suspense
 const LoadingFallback = ({ message = 'Cargando...' }) => (
   <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -58,12 +80,13 @@ const LoadingFallback = ({ message = 'Cargando...' }) => (
 );
 
 const AdminPanel: React.FC = () => {
-  const { config, saveConfig, isLoading, loadConfigSection, sectionLoaded } = useConfig();
+  const { config, saveConfig, isLoading: configLoading, setIsLoading, loadConfigSection, 
+          sectionLoaded, saveSiteConfigOnly, saveAppearanceOnly, saveMenuOnly } = useConfig();
   const { user, loading, login, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [editableConfig, setEditableConfig] = useState<EditableConfig>(JSON.parse(JSON.stringify(config)));
+  const [editableConfig, setEditableConfig] = useState<EditableConfig>(fallbackConfig);
   const [activeTab, setActiveTab] = useState('menu');
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -73,6 +96,7 @@ const AdminPanel: React.FC = () => {
   const [showResendForm, setShowResendForm] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [tabLoading, setTabLoading] = useState(false);
+  const [configLoadAttempted, setConfigLoadAttempted] = useState(false);
 
   // Timeout para pantalla de carga
   useEffect(() => {
@@ -88,6 +112,18 @@ const AdminPanel: React.FC = () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [loading, roleLoading]);
+
+  // Forzar avance después de un tiempo si no se carga la configuración
+  useEffect(() => {
+    const forceAdvanceTimeout = setTimeout(() => {
+      if (!configLoadAttempted) {
+        console.warn("Forzando avance debido a timeout de carga de configuración");
+        setConfigLoadAttempted(true);
+      }
+    }, 5000);
+
+    return () => clearTimeout(forceAdvanceTimeout);
+  }, []);
 
   // Cargar el rol del usuario actual
   useEffect(() => {
@@ -124,10 +160,43 @@ const AdminPanel: React.FC = () => {
 
   // Actualizar la copia editable cuando cambia la configuración
   useEffect(() => {
-    setEditableConfig(JSON.parse(JSON.stringify(config)));
+    if (config) {
+      try {
+        // Crear una copia segura de la configuración
+        const configCopy = JSON.parse(JSON.stringify(config));
+        
+        // Asegurar que todas las propiedades existan
+        const safeConfig = {
+          restaurantName: configCopy.restaurantName || '',
+          whatsappNumber: configCopy.whatsappNumber || '',
+          currency: configCopy.currency || '',
+          openingHours: configCopy.openingHours || '',
+          footerText: configCopy.footerText || '',
+          theme: configCopy.theme || {
+            primaryColor: '',
+            accentColor: '',
+            textColor: '',
+            backgroundColor: '',
+            cartButtonColor: '',
+            floatingCartButtonColor: ''
+          },
+          categories: Array.isArray(configCopy.categories) ? configCopy.categories : [],
+          cashDenominations: Array.isArray(configCopy.cashDenominations) ? configCopy.cashDenominations : []
+        };
+        
+        setEditableConfig(safeConfig);
+        setConfigLoadAttempted(true);
+        console.log("✅ Configuración cargada desde Supabase:", safeConfig);
+      } catch (error) {
+        console.error("❌ Error al procesar la configuración:", error);
+        // Si hay un error, usar fallbackConfig
+        setEditableConfig(fallbackConfig);
+        setConfigLoadAttempted(true);
+      }
+    }
   }, [config]);
 
-  // Cargar datos específicos cuando cambia la pestaña activa - optimizado para prevenir bucles
+  // Cargar datos específicos cuando cambia la pestaña activa
   useEffect(() => {
     if (!user) return; // No hacer nada si no hay usuario
     
@@ -191,6 +260,7 @@ const AdminPanel: React.FC = () => {
           }
         } catch (error) {
           console.error(`[❌ AdminPanel] Error al cargar datos para la pestaña ${activeTab}:`, error);
+          // No agregar ningún valor por defecto, solo manejar el error
         } finally {
           // Solo actualizar estado si el componente sigue montado
           if (isComponentMounted.current) {
@@ -269,8 +339,54 @@ const AdminPanel: React.FC = () => {
   // Guardar cambios
   const handleSaveChanges = async () => {
     try {
-      // Usar el contexto para guardar la configuración en Supabase
-      await saveConfig(editableConfig);
+      console.log('Guardando configuración con valores:', editableConfig);
+      // Mostrar estado de guardado
+      setSaveSuccess(false);
+      setIsLoading(true);
+      
+      // Si hay cambios en la apariencia, guardar primero esa sección
+      if (activeTab === 'appearance') {
+        const appearanceData = {
+          primary_color: editableConfig.theme?.primaryColor || '',
+          accent_color: editableConfig.theme?.accentColor || '',
+          text_color: editableConfig.theme?.textColor || '',
+          background_color: editableConfig.theme?.backgroundColor || '',
+          cart_button_color: editableConfig.theme?.cartButtonColor || '',
+          floating_cart_button_color: editableConfig.theme?.floatingCartButtonColor || ''
+        };
+        
+        console.log('Guardando datos de apariencia:', appearanceData);
+        
+        // Guardar solo la configuración de apariencia si estamos en esa pestaña
+        await saveAppearanceOnly({
+          primaryColor: editableConfig.theme?.primaryColor || '',
+          accentColor: editableConfig.theme?.accentColor || '',
+          textColor: editableConfig.theme?.textColor || '',
+          backgroundColor: editableConfig.theme?.backgroundColor || '',
+          cartButtonColor: editableConfig.theme?.cartButtonColor || '',
+          floatingCartButtonColor: editableConfig.theme?.floatingCartButtonColor || ''
+        });
+      } else if (activeTab === 'general') {
+        // Guardar solo la configuración del sitio si estamos en esa pestaña
+        await saveSiteConfigOnly({
+          restaurantName: editableConfig.restaurantName || '',
+          whatsappNumber: editableConfig.whatsappNumber || '',
+          currency: editableConfig.currency || '',
+          openingHours: editableConfig.openingHours || '',
+          footerText: editableConfig.footerText || '',
+          cashDenominations: editableConfig.cashDenominations || []
+        });
+      } else if (activeTab === 'menu' || activeTab === 'categories') {
+        // Guardar solo el menú si estamos en esas pestañas
+        await saveMenuOnly(editableConfig.categories);
+      } else {
+        // Guardar toda la configuración para otros casos
+        await saveConfig(editableConfig);
+      }
+      
+      // Recargar los datos para mostrar los cambios actualizados
+      await loadConfigSection(activeTab === 'menu' || activeTab === 'categories' ? 'menu' : 
+                             activeTab === 'appearance' ? 'appearance' : 'site');
       
       // Notificar al usuario
       setSaveSuccess(true);
@@ -278,6 +394,9 @@ const AdminPanel: React.FC = () => {
       setHasChanges(false);
     } catch (error) {
       console.error('Error al guardar configuración:', error);
+      alert('Ha ocurrido un error al guardar la configuración. Por favor, intente de nuevo.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -297,13 +416,13 @@ const AdminPanel: React.FC = () => {
     updateConfigSection('categories', newCategories);
   };
 
-  // Si está cargando, mostrar indicador
-  if (loading || roleLoading) {
+  // Si está cargando, mostrar indicador (pero sólo por un tiempo razonable)
+  if ((loading || roleLoading) && !configLoadAttempted) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: "#FFFFFF" }}>
         <div className="text-center p-4">
           <div className="w-12 h-12 border-4 border-t-primary rounded-full animate-spin mx-auto mb-4" 
-               style={{ borderTopColor: config.theme.primaryColor }}></div>
+               style={{ borderTopColor: '#003b29' }}></div>
           <p className="text-gray-600">Cargando...</p>
           
           {loadingTimeout && (
@@ -330,7 +449,7 @@ const AdminPanel: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#FFFFFF" }}>
         <div className="w-full max-w-md">
           <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-            <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: config.theme.primaryColor }}>
+            <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: editableConfig.theme?.primaryColor || '#003b29' }}>
               Panel de Administración
             </h1>
             
@@ -364,7 +483,7 @@ const AdminPanel: React.FC = () => {
               <button
                 type="submit"
                 className="w-full py-2 px-4 text-white font-medium rounded"
-                style={{ backgroundColor: config.theme.primaryColor }}
+                style={{ backgroundColor: editableConfig.theme?.primaryColor || '#003b29' }}
               >
                 Iniciar Sesión
               </button>
@@ -388,7 +507,7 @@ const AdminPanel: React.FC = () => {
           </div>
           
           {showResendForm && (
-            <ResendConfirmation themeColor={config.theme.primaryColor} />
+            <ResendConfirmation themeColor={editableConfig.theme?.primaryColor || '#003b29'} />
           )}
         </div>
       </div>
@@ -408,8 +527,8 @@ const AdminPanel: React.FC = () => {
           >
             <Menu size={22} />
           </button>
-          <h1 className="text-base sm:text-xl font-bold truncate" style={{ color: config.theme.primaryColor }}>
-            {isLoading ? 'Cargando...' : editableConfig.restaurantName}
+          <h1 className="text-base sm:text-xl font-bold truncate" style={{ color: editableConfig.theme?.primaryColor || '#003b29' }}>
+            {configLoading ? 'Cargando...' : editableConfig.restaurantName}
           </h1>
         </div>
         
@@ -418,8 +537,8 @@ const AdminPanel: React.FC = () => {
             <button
               onClick={handleSaveChanges}
               className="flex items-center gap-1 py-2 px-3 sm:px-4 text-white font-medium rounded text-sm"
-              style={{ backgroundColor: config.theme.primaryColor }}
-              disabled={isLoading || tabLoading}
+              style={{ backgroundColor: editableConfig.theme?.primaryColor || '#003b29' }}
+              disabled={configLoading || tabLoading}
             >
               <Save size={16} /> <span className="hidden sm:inline">Guardar</span>
             </button>
@@ -485,14 +604,14 @@ const AdminPanel: React.FC = () => {
                     <button
                       onClick={() => { setActiveTab('menu'); setShowMobileMenu(false); }}
                       className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'menu' ? 'bg-gray-100' : ''}`}
-                      style={{ color: activeTab === 'menu' ? config.theme.primaryColor : '' }}
+                      style={{ color: activeTab === 'menu' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                     >
                       <Grid size={18} className="mr-3" /> Menú
                     </button>
                     <button
                       onClick={() => { setActiveTab('categories'); setShowMobileMenu(false); }}
                       className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'categories' ? 'bg-gray-100' : ''}`}
-                      style={{ color: activeTab === 'categories' ? config.theme.primaryColor : '' }}
+                      style={{ color: activeTab === 'categories' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                     >
                       <Grid size={18} className="mr-3" /> Categorías
                     </button>
@@ -506,35 +625,35 @@ const AdminPanel: React.FC = () => {
                       <button
                         onClick={() => { setActiveTab('general'); setShowMobileMenu(false); }}
                         className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'general' ? 'bg-gray-100' : ''}`}
-                        style={{ color: activeTab === 'general' ? config.theme.primaryColor : '' }}
+                        style={{ color: activeTab === 'general' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                       >
                         <Settings size={18} className="mr-3" /> Configuración General
                       </button>
                       <button
                         onClick={() => { setActiveTab('appearance'); setShowMobileMenu(false); }}
                         className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'appearance' ? 'bg-gray-100' : ''}`}
-                        style={{ color: activeTab === 'appearance' ? config.theme.primaryColor : '' }}
+                        style={{ color: activeTab === 'appearance' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                       >
                         <Settings size={18} className="mr-3" /> Apariencia
                       </button>
                       <button
                         onClick={() => { setActiveTab('users'); setShowMobileMenu(false); }}
                         className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'users' ? 'bg-gray-100' : ''}`}
-                        style={{ color: activeTab === 'users' ? config.theme.primaryColor : '' }}
+                        style={{ color: activeTab === 'users' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                       >
                         <Settings size={18} className="mr-3" /> Usuarios
                       </button>
                       <button
                         onClick={() => { setActiveTab('system'); setShowMobileMenu(false); }}
                         className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'system' ? 'bg-gray-100' : ''}`}
-                        style={{ color: activeTab === 'system' ? config.theme.primaryColor : '' }}
+                        style={{ color: activeTab === 'system' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                       >
                         <Settings size={18} className="mr-3" /> Sistema
                       </button>
                       <button
                         onClick={() => { setActiveTab('import-export'); setShowMobileMenu(false); }}
                         className={`flex items-center w-full p-3 rounded-lg ${activeTab === 'import-export' ? 'bg-gray-100' : ''}`}
-                        style={{ color: activeTab === 'import-export' ? config.theme.primaryColor : '' }}
+                        style={{ color: activeTab === 'import-export' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                       >
                         <Upload size={18} className="mr-3" /> Importar/Exportar
                       </button>
@@ -561,8 +680,8 @@ const AdminPanel: React.FC = () => {
                     ? 'border-primary text-primary'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
-                style={{ borderColor: activeTab === 'menu' ? config.theme.primaryColor : 'transparent',
-                       color: activeTab === 'menu' ? config.theme.primaryColor : '' }}
+                style={{ borderColor: activeTab === 'menu' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                       color: activeTab === 'menu' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
               >
                 Menú
               </button>
@@ -573,8 +692,8 @@ const AdminPanel: React.FC = () => {
                     ? 'border-primary text-primary'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
-                style={{ borderColor: activeTab === 'categories' ? config.theme.primaryColor : 'transparent',
-                       color: activeTab === 'categories' ? config.theme.primaryColor : '' }}
+                style={{ borderColor: activeTab === 'categories' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                       color: activeTab === 'categories' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
               >
                 Categorías
               </button>
@@ -589,8 +708,8 @@ const AdminPanel: React.FC = () => {
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                    style={{ borderColor: activeTab === 'general' ? config.theme.primaryColor : 'transparent',
-                           color: activeTab === 'general' ? config.theme.primaryColor : '' }}
+                    style={{ borderColor: activeTab === 'general' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                           color: activeTab === 'general' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                   >
                     Configuración General
                   </button>
@@ -601,8 +720,8 @@ const AdminPanel: React.FC = () => {
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                    style={{ borderColor: activeTab === 'appearance' ? config.theme.primaryColor : 'transparent',
-                           color: activeTab === 'appearance' ? config.theme.primaryColor : '' }}
+                    style={{ borderColor: activeTab === 'appearance' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                           color: activeTab === 'appearance' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                   >
                     Apariencia
                   </button>
@@ -613,8 +732,8 @@ const AdminPanel: React.FC = () => {
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                    style={{ borderColor: activeTab === 'users' ? config.theme.primaryColor : 'transparent',
-                           color: activeTab === 'users' ? config.theme.primaryColor : '' }}
+                    style={{ borderColor: activeTab === 'users' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                           color: activeTab === 'users' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                   >
                     Usuarios
                   </button>
@@ -625,8 +744,8 @@ const AdminPanel: React.FC = () => {
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                    style={{ borderColor: activeTab === 'system' ? config.theme.primaryColor : 'transparent',
-                           color: activeTab === 'system' ? config.theme.primaryColor : '' }}
+                    style={{ borderColor: activeTab === 'system' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                           color: activeTab === 'system' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                   >
                     Sistema
                   </button>
@@ -637,8 +756,8 @@ const AdminPanel: React.FC = () => {
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
-                    style={{ borderColor: activeTab === 'import-export' ? config.theme.primaryColor : 'transparent',
-                           color: activeTab === 'import-export' ? config.theme.primaryColor : '' }}
+                    style={{ borderColor: activeTab === 'import-export' ? editableConfig.theme?.primaryColor || '#003b29' : 'transparent',
+                           color: activeTab === 'import-export' ? editableConfig.theme?.primaryColor || '#003b29' : '' }}
                   >
                     Importar/Exportar
                   </button>
@@ -649,7 +768,7 @@ const AdminPanel: React.FC = () => {
 
           {/* Título móvil de la sección actual */}
           <div className="sm:hidden mb-3">
-            <h2 className="text-lg font-semibold" style={{ color: config.theme.primaryColor }}>
+            <h2 className="text-lg font-semibold" style={{ color: editableConfig.theme?.primaryColor || '#003b29' }}>
               {activeTab === 'menu' && "Menú"}
               {activeTab === 'categories' && "Categorías"}
               {activeTab === 'general' && "Configuración General"}
@@ -667,7 +786,7 @@ const AdminPanel: React.FC = () => {
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <div 
                   className="w-10 h-10 border-4 border-t-primary rounded-full animate-spin mb-4" 
-                  style={{ borderTopColor: config.theme.primaryColor }}
+                  style={{ borderTopColor: editableConfig.theme?.primaryColor || '#003b29' }}
                 ></div>
                 <p className="text-gray-600">Cargando datos...</p>
               </div>
@@ -677,69 +796,122 @@ const AdminPanel: React.FC = () => {
                   <GeneralSettings 
                     config={editableConfig} 
                     onChange={(newGeneralSettings) => {
-                      const updatedConfig = {...editableConfig, ...newGeneralSettings};
+                      // Preservar las propiedades que no maneja el GeneralSettings
+                      const updatedConfig = {
+                        ...editableConfig,
+                        ...newGeneralSettings,
+                        // Preservar explícitamente theme y categories
+                        theme: editableConfig.theme || fallbackConfig.theme,
+                        categories: editableConfig.categories || fallbackConfig.categories
+                      };
                       handleConfigChange(updatedConfig);
                     }}
                   />
                 )}
 
                 {activeTab === 'appearance' && userRole === 'admin' && (
-                  <div className="space-y-4 sm:space-y-6">
-                    <h2 className="text-base sm:text-lg font-semibold">Colores del Sitio</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                      <ColorPicker
-                        label="Color Primario"
-                        value={editableConfig.theme.primaryColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, primaryColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
-                      
-                      <ColorPicker
-                        label="Color de Acento"
-                        value={editableConfig.theme.accentColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, accentColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
-                      
-                      <ColorPicker
-                        label="Color de Texto"
-                        value={editableConfig.theme.textColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, textColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
-                      
-                      <ColorPicker
-                        label="Color de Fondo"
-                        value={editableConfig.theme.backgroundColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, backgroundColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
-                      
-                      <ColorPicker
-                        label="Color Botón Agregar"
-                        value={editableConfig.theme.cartButtonColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, cartButtonColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
-                      
-                      <ColorPicker
-                        label="Color Botón Flotante"
-                        value={editableConfig.theme.floatingCartButtonColor}
-                        onChange={(color) => {
-                          const newTheme = {...editableConfig.theme, floatingCartButtonColor: color};
-                          updateConfigSection('theme', newTheme);
-                        }}
-                      />
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                      <h2 className="text-xl font-semibold mb-6 pb-2 border-b">Colores y Apariencia</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <ModernColorPicker
+                          label="Color Primario"
+                          value={editableConfig.theme?.primaryColor || '#003b29'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              primaryColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                        
+                        <ModernColorPicker
+                          label="Color de Acento"
+                          value={editableConfig.theme?.accentColor || '#4caf50'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              accentColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                        
+                        <ModernColorPicker
+                          label="Color de Texto"
+                          value={editableConfig.theme?.textColor || '#333333'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              textColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                        
+                        <ModernColorPicker
+                          label="Color de Fondo"
+                          value={editableConfig.theme?.backgroundColor || '#ffffff'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              backgroundColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                        
+                        <ModernColorPicker
+                          label="Color Botón Carrito"
+                          value={editableConfig.theme?.cartButtonColor || '#003b29'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              cartButtonColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                        
+                        <ModernColorPicker
+                          label="Color Botón Flotante"
+                          value={editableConfig.theme?.floatingCartButtonColor || '#003b29'}
+                          onChange={(color) => {
+                            const newTheme = {
+                              ...(editableConfig.theme || {}),
+                              floatingCartButtonColor: color
+                            };
+                            updateConfigSection('theme', newTheme);
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-8 pt-5 border-t">
+                        <h3 className="text-lg font-medium mb-4">Vista Previa</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-4 rounded" style={{backgroundColor: editableConfig.theme?.backgroundColor || '#ffffff'}}>
+                            <h4 className="font-medium" style={{color: editableConfig.theme?.primaryColor || '#003b29'}}>Título Principal</h4>
+                            <p style={{color: editableConfig.theme?.textColor || '#333333'}}>Este es un texto de ejemplo para ver cómo se verán los colores en tu sitio.</p>
+                            <button className="mt-2 px-4 py-2 rounded text-white" style={{backgroundColor: editableConfig.theme?.cartButtonColor || '#003b29'}}>
+                              Botón de Carrito
+                            </button>
+                          </div>
+                          
+                          <div className="p-4 rounded border" style={{backgroundColor: editableConfig.theme?.backgroundColor || '#ffffff'}}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-medium" style={{color: editableConfig.theme?.primaryColor || '#003b29'}}>Elemento del Menú</span>
+                              <span className="text-sm font-bold" style={{color: editableConfig.theme?.accentColor || '#4caf50'}}>$10.99</span>
+                            </div>
+                            <p className="text-sm" style={{color: editableConfig.theme?.textColor || '#333333'}}>Descripción del elemento del menú con todos los detalles.</p>
+                            <div className="flex justify-end mt-2">
+                              <button className="px-2 py-1 rounded-full text-xs text-white" style={{backgroundColor: editableConfig.theme?.floatingCartButtonColor || '#003b29'}}>
+                                Agregar al Carrito
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -762,19 +934,19 @@ const AdminPanel: React.FC = () => {
                 {activeTab === 'users' && userRole === 'admin' && (
                   <UserManager
                     currentUserEmail={user.email}
-                    themeColor={config.theme.primaryColor}
+                    themeColor={editableConfig.theme?.primaryColor || '#003b29'}
                   />
                 )}
                 
                 {activeTab === 'system' && userRole === 'admin' && (
                   <SystemStatus
-                    themeColor={config.theme.primaryColor}
+                    themeColor={editableConfig.theme?.primaryColor || '#003b29'}
                   />
                 )}
 
                 {activeTab === 'import-export' && userRole === 'admin' && (
                   <ImportExportData
-                    themeColor={config.theme.primaryColor}
+                    themeColor={editableConfig.theme?.primaryColor || '#003b29'}
                   />
                 )}
               </Suspense>
@@ -792,7 +964,7 @@ const AdminPanel: React.FC = () => {
             target="_blank" 
             rel="noopener noreferrer"
             className="underline hover:text-gray-800 font-medium"
-            style={{ color: config.theme.primaryColor }}
+            style={{ color: editableConfig.theme?.primaryColor || '#003b29' }}
           >
             Eduardo Soto
           </a>

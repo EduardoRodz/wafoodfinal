@@ -3,62 +3,37 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * CONFIGURACIÓN DE SEGURIDAD PARA SUPABASE
  * 
- * Este archivo primero intentará cargar las credenciales desde Supabase,
- * si no están disponibles, usará localStorage (instalador),
- * y finalmente usará las variables de entorno o valores predeterminados.
+ * Este archivo maneja las credenciales de Supabase de forma segura utilizando
+ * variables de entorno, y proporciona inicialización asíncrona segura.
  */
 
-// Intentar obtener las credenciales del localStorage primero (guardadas por el instalador)
+// Cargar desde localStorage (guardadas por el instalador) o variables de entorno
 const STORED_URL = localStorage.getItem('supabaseUrl');
 const STORED_ANON_KEY = localStorage.getItem('supabaseAnonKey');
 const STORED_SERVICE_KEY = localStorage.getItem('supabaseServiceKey');
 
-// URL de Supabase (priorizar localStorage, luego variables de entorno, luego valor predeterminado)
+// URL de Supabase (priorizar localStorage, luego variables de entorno)
 const SUPABASE_URL = STORED_URL || import.meta.env?.VITE_SUPABASE_URL;
 
-// Claves API
+// Claves API (priorizar localStorage, luego variables de entorno)
 const ANON_KEY = STORED_ANON_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY;
-
 const SERVICE_KEY = STORED_SERVICE_KEY || import.meta.env?.VITE_SUPABASE_SERVICE_KEY;
 
-// Definir URLs iniciales para los clientes temporales
-const INITIAL_URL = STORED_URL || SUPABASE_URL;
-const INITIAL_ANON_KEY = STORED_ANON_KEY || ANON_KEY;
-
-// Función para decodificar base64url de manera segura en navegador
-const base64UrlDecode = (str: string): string => {
-  try {
-    // Convertir base64url a base64 estándar
-    const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-    
-    // Añadir padding si es necesario
-    const padding = '='.repeat((4 - base64.length % 4) % 4);
-    const base64Padded = base64 + padding;
-    
-    // Decodificar usando atob en navegador
-    const raw = atob(base64Padded);
-    
-    // Convertir la cadena de bytes a string UTF-8
-    const output = decodeURIComponent(
-      Array.from(raw).map(char => '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2)).join('')
-    );
-    
-    return output;
-  } catch (e) {
-    console.error('Error decodificando base64url:', e);
-    // En caso de error, devolvemos un JSON vacío que igual podemos parsear
-    return '{}';
-  }
-};
+// Variables para los clientes y estado de inicialización
+let supabaseClient: any = null;
+let supabaseAdminClient: any = null;
+let initialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 // Función para validar que una clave tenga el formato JWT correcto
-const validateKey = (key: string, role: string): boolean => {
+const validateKey = (key: string | undefined | null, role: string): boolean => {
+  if (!key) return false;
   try {
     const parts = key.split('.');
     if (parts.length !== 3) return false;
     
-    // Intentar extraer el payload
-    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    // Decodificar el payload de base64
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     return payload.role === role;
   } catch (e) {
     console.error('Error validando clave API:', e);
@@ -66,259 +41,139 @@ const validateKey = (key: string, role: string): boolean => {
   }
 };
 
-// Función para cargar credenciales desde la tabla site_config en la base de datos
-const loadCredentialsFromDatabase = async (): Promise<{ url: string, anonKey: string, serviceKey: string } | null> => {
-  try {
-    // No intentar cargar credenciales desde la base de datos si estamos en el instalador
-    if (window.location.pathname === '/instalador') {
-      console.log('En página del instalador, no se intentará cargar credenciales desde la base de datos');
-      return null;
-    }
-    
-    // Método 1: Usar cliente Supabase estándar
+// Función para inicializar los clientes de Supabase de forma asíncrona
+const initializeSupabaseClients = async (): Promise<void> => {
+  if (initialized) return;
+  
+  // Si ya hay una inicialización en curso, esperar a que termine
+  if (initializationPromise) {
+    await initializationPromise;
+    return;
+  }
+  
+  // Crear una promesa para la inicialización
+  initializationPromise = (async () => {
     try {
-      console.log('Método 1: Intentando obtener credenciales desde site_config con cliente Supabase...');
-      // Crear un cliente temporal para la primera conexión usando localStorage
-      const tempClient = createClient(INITIAL_URL, INITIAL_ANON_KEY);
-      
-      // Intentar obtener las credenciales de las columnas específicas en site_config
-      const { data, error } = await tempClient
-        .from('site_config')
-        .select('supabase_url, supabase_anon_key, supabase_service_key')
-        .order('id', { ascending: false })
-        .limit(1);
-      
-      if (!error && data && data.length > 0 && 
-          data[0].supabase_url && 
-          data[0].supabase_anon_key && 
-          data[0].supabase_service_key) {
-        console.log('Credenciales obtenidas exitosamente desde site_config con cliente Supabase');
-        return {
-          url: data[0].supabase_url,
-          anonKey: data[0].supabase_anon_key,
-          serviceKey: data[0].supabase_service_key
-        };
-      }
-    } catch (clientError) {
-      console.log('Error al obtener credenciales con cliente Supabase:', clientError);
-    }
-    
-    // Método 2: Usar fetch directo a la API REST de Supabase
-    try {
-      console.log('Método 2: Intentando obtener credenciales con fetch directo a API REST...');
-      
-      if (!STORED_URL || !STORED_ANON_KEY) {
-        console.log('Faltan credenciales en localStorage para fetch directo');
-      } else {
-        const response = await fetch(
-          `${STORED_URL}/rest/v1/site_config?select=supabase_url,supabase_anon_key,supabase_service_key&order=id.desc&limit=1`,
-          {
-            method: 'GET',
-            headers: {
-              'apikey': STORED_ANON_KEY,
-              'Authorization': `Bearer ${STORED_ANON_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0 && 
-              data[0].supabase_url && 
-              data[0].supabase_anon_key && 
-              data[0].supabase_service_key) {
-            console.log('Credenciales obtenidas exitosamente con fetch directo');
-            return {
-              url: data[0].supabase_url,
-              anonKey: data[0].supabase_anon_key,
-              serviceKey: data[0].supabase_service_key
-            };
-          }
-        } else {
-          console.log('Error en fetch directo:', response.status, response.statusText);
+      // Verificar la presencia de las credenciales necesarias
+      if (!SUPABASE_URL) {
+        console.error('URL de Supabase no configurada');
+        throw new Error('URL de Supabase no configurada');
         }
-      }
-    } catch (fetchError) {
-      console.log('Error en fetch directo:', fetchError);
-    }
-    
-    // Método 3: Verificar si hay un registro de configuración como prueba de instalación completa
-    try {
-      console.log('Método 3: Verificando si hay registros en site_config como prueba de instalación...');
-      const tempClient = createClient(INITIAL_URL, INITIAL_ANON_KEY);
       
-      const { count, error: countError } = await tempClient
-        .from('site_config')
-        .select('*', { count: 'exact', head: true });
-        
-      if (!countError && count && count > 0) {
-        console.log(`Se encontraron ${count} registros en site_config, usando credenciales de localStorage`);
-        
-        // Si hay registros pero no pudimos obtener las credenciales específicas,
-        // usamos las de localStorage como válidas (probablemente la instalación está completa)
-        if (STORED_URL && STORED_ANON_KEY && STORED_SERVICE_KEY) {
-          return {
-            url: STORED_URL,
-            anonKey: STORED_ANON_KEY,
-            serviceKey: STORED_SERVICE_KEY
-          };
-        }
+      if (!ANON_KEY) {
+        console.error('Clave anónima de Supabase no configurada');
+        throw new Error('Clave anónima de Supabase no configurada');
       }
-    } catch (countError) {
-      console.log('Error al verificar existencia de registros:', countError);
-    }
-    
-    // Si todos los métodos fallan, devolver null para usar fallback
-    console.log('No se encontraron credenciales válidas en la base de datos');
-    return null;
-  } catch (error) {
-    console.error('Error al cargar credenciales desde la base de datos:', error);
-    return null;
-  }
-};
-
-// Crear variables para los clientes y datos
-let supabase: any = null;
-let supabaseAdmin: any = null;
-let supabaseUrl: string | null = null;
-let serviceKey: string | null = null;
-let initialized = false;
-let supabaseCredentials: any = null;
-
-// Función asíncrona para inicializar los clientes
-export const initializeSupabaseClients = async () => {
-  if (!initialized) {
-    // Intentar cargar credenciales desde Supabase si tenemos credenciales iniciales
-    if (STORED_URL && STORED_ANON_KEY) {
-      supabaseCredentials = await loadCredentialsFromDatabase();
-    }
-    // Usar las credenciales cargadas o las predeterminadas
-    const finalUrl = supabaseCredentials?.url || SUPABASE_URL;
-    const finalAnonKey = supabaseCredentials?.anonKey || ANON_KEY;
-    const finalServiceKey = supabaseCredentials?.serviceKey || SERVICE_KEY;
-
-    // Validar claves antes de inicializar clientes
-    if (!validateKey(finalAnonKey, 'anon')) {
-      console.error('ERROR: La clave anónima no tiene el formato correcto o no contiene el rol "anon"');
-    }
-    if (!validateKey(finalServiceKey, 'service_role')) {
-      console.error('ERROR: La clave de servicio no tiene el formato correcto o no contiene el rol "service_role"');
-    }
-    // Crear cliente estándar para operaciones regulares
-    supabase = createClient(finalUrl, finalAnonKey);
-    // Crear cliente con permisos administrativos (service_role)
-    supabaseAdmin = createClient(finalUrl, finalServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false // Desactivar detección de sesión en URL para cliente admin
-      },
-      global: {
-        headers: {
-          Authorization: `Bearer ${finalServiceKey}`,
-          apikey: finalServiceKey
-        }
+      
+      if (!SERVICE_KEY) {
+        console.error('Clave de servicio de Supabase no configurada');
+        throw new Error('Clave de servicio de Supabase no configurada');
       }
-    });
-    // Proteger contra exposición accidental en consola
-    Object.defineProperty(supabase, 'toString', {
-      value: () => '[Objeto Supabase - Claves ocultas]',
-      writable: false
-    });
-    Object.defineProperty(supabaseAdmin, 'toString', {
-      value: () => '[Objeto SupabaseAdmin - Claves ocultas]',
-      writable: false
-    });
-    supabaseUrl = finalUrl;
-    serviceKey = finalServiceKey;
-    initialized = true;
-    // Log para confirmar inicialización
-    console.log(`Supabase configurado para: ${finalUrl}`);
-    console.log(`Cliente anónimo inicializado: ${validateKey(finalAnonKey, 'anon') ? 'OK' : 'ERROR'}`);
-    console.log(`Cliente admin inicializado: ${validateKey(finalServiceKey, 'service_role') ? 'OK' : 'ERROR'}`);
-    // Verificar que el cliente admin está correctamente configurado
-    if (window.location.pathname !== '/instalador') {
-      supabaseAdmin.auth.admin.listUsers().then(({ data, error }) => {
-        if (error) {
-          console.error("ERROR: El cliente admin no tiene permisos para acceder a la API de admin:", error.message);
-        } else {
-          console.log("Cliente admin verificado: Acceso a API de admin funcionando correctamente");
-        }
-      }).catch(err => {
-        console.error("ERROR crítico con cliente admin:", err.message);
-      });
-    }
-  }
-  return { supabase, supabaseAdmin, supabaseUrl, serviceKey };
-};
-
-// Funciones para obtener los clientes ya inicializados (lanzan error si no están listos)
-export const getSupabase = () => {
-  if (!initialized) throw new Error('Supabase no inicializado. Llama a initializeSupabaseClients primero.');
-  return supabase;
-};
-export const getSupabaseAdmin = () => {
-  if (!initialized) throw new Error('SupabaseAdmin no inicializado. Llama a initializeSupabaseClients primero.');
-  return supabaseAdmin;
-};
-export const getSupabaseUrl = () => {
-  if (!initialized) throw new Error('SupabaseUrl no inicializado. Llama a initializeSupabaseClients primero.');
-  return supabaseUrl;
-};
-export const getServiceKey = () => {
-  if (!initialized) throw new Error('ServiceKey no inicializado. Llama a initializeSupabaseClients primero.');
-  return serviceKey;
-};
-
-// Implementación del patrón Singleton para gestionar los clientes de Supabase
-class SupabaseManager {
-  private static instance: SupabaseManager;
-  private initialized = false;
-  private supabaseClient;
-  private supabaseAdminClient;
-  private supabaseUrl;
-  private serviceKey;
-
-  private constructor() {
-    this.supabaseClient = supabase;
-    this.supabaseAdminClient = supabaseAdmin;
-    this.supabaseUrl = supabaseUrl;
-    this.serviceKey = serviceKey || SERVICE_KEY;
-    this.initialized = true;
-  }
-
-  public static getInstance(): SupabaseManager {
-    if (!SupabaseManager.instance) {
-      SupabaseManager.instance = new SupabaseManager();
-    }
-    return SupabaseManager.instance;
-  }
-
-  public getClient() {
-    return this.supabaseClient;
-  }
-
-  public getAdminClient() {
-    return this.supabaseAdminClient;
-  }
-
-  public getUrl() {
-    return this.supabaseUrl;
-  }
-
-  public getServiceKey() {
-    return this.serviceKey;
-  }
-
-  public isInitialized() {
-    return this.initialized;
-  }
+      
+      // Validar las claves antes de inicializar los clientes
+      const isAnonKeyValid = validateKey(ANON_KEY, 'anon');
+      const isServiceKeyValid = validateKey(SERVICE_KEY, 'service_role');
+      
+      if (!isAnonKeyValid) {
+        console.warn('La clave anónima no tiene el formato correcto o no contiene el rol "anon"');
 }
 
-// Función para obtener la instancia del gestor de Supabase
-export const getSupabaseManager = (): SupabaseManager => {
-  return SupabaseManager.getInstance();
+      if (!isServiceKeyValid) {
+        console.warn('La clave de servicio no tiene el formato correcto o no contiene el rol "service_role"');
+}
+
+// Crear cliente estándar para operaciones regulares
+      supabaseClient = createClient(SUPABASE_URL, ANON_KEY);
+
+// Crear cliente con permisos administrativos (service_role)
+      supabaseAdminClient = createClient(SUPABASE_URL, SERVICE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false // Desactivar detección de sesión en URL para cliente admin
+  },
+  global: {
+    headers: {
+            Authorization: `Bearer ${SERVICE_KEY}`,
+            apikey: SERVICE_KEY
+    }
+  }
+});
+
+// Proteger contra exposición accidental en consola
+      Object.defineProperty(supabaseClient, 'toString', {
+  value: () => '[Objeto Supabase - Claves ocultas]',
+  writable: false
+});
+
+      Object.defineProperty(supabaseAdminClient, 'toString', {
+  value: () => '[Objeto SupabaseAdmin - Claves ocultas]',
+  writable: false
+});
+
+      // Marcar como inicializado
+      initialized = true;
+      console.log(`Supabase configurado para: ${SUPABASE_URL}`);
+      console.log(`Cliente anónimo inicializado: ${isAnonKeyValid ? 'OK' : 'ADVERTENCIA'}`);
+      console.log(`Cliente admin inicializado: ${isServiceKeyValid ? 'OK' : 'ADVERTENCIA'}`);
+      
+    } catch (error) {
+      console.error('Error inicializando clientes Supabase:', error);
+      throw error;
+    }
+  })();
+
+  // Esperar a que la inicialización termine
+  await initializationPromise;
+  initializationPromise = null;
 };
 
-// Exportación por defecto eliminada para evitar confusión 
+// Función asíncrona para obtener el cliente estándar
+export const getSupabase = async () => {
+  await initializeSupabaseClients();
+  return supabaseClient;
+};
+
+// Función asíncrona para obtener el cliente admin
+export const getSupabaseAdmin = async () => {
+  await initializeSupabaseClients();
+  return supabaseAdminClient;
+};
+
+// Versiones sincrónicas para casos especiales (uso con precaución)
+export const getSupabaseSync = () => {
+  if (!initialized) {
+    console.warn('Advertencia: Supabase no ha sido inicializado correctamente. Inicializa primero con getSupabase().');
+    }
+  return supabaseClient;
+};
+
+export const getSupabaseAdminSync = () => {
+  if (!initialized) {
+    console.warn('Advertencia: Supabase Admin no ha sido inicializado correctamente. Inicializa primero con getSupabaseAdmin().');
+  }
+  return supabaseAdminClient;
+};
+
+// Función para reiniciar los clientes (útil para cambios de credenciales)
+export const reinitializeSupabase = () => {
+  initialized = false;
+  return initializeSupabaseClients();
+};
+
+// Funciones para obtener URL y claves
+export const getServiceKey = async (): Promise<string | null> => {
+  await initializeSupabaseClients();
+  return SERVICE_KEY;
+};
+
+export const getSupabaseUrl = async (): Promise<string | null> => {
+  await initializeSupabaseClients();
+  return SUPABASE_URL;
+};
+
+// Inicializar Supabase automáticamente cuando se importa este módulo
+// (pero sin bloquear porque es una Promise)
+initializeSupabaseClients().catch(error => {
+  console.error('Error en inicialización automática de Supabase:', error);
+}); 

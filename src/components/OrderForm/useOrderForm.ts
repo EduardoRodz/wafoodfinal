@@ -9,12 +9,21 @@ export const useOrderForm = () => {
   const { config } = useConfig();
   const formatCurrency = useFormatCurrency();
   const { toast } = useToast();
+  
+  // Asegurar que config.cashDenominations exista y tenga al menos un elemento
+  const safeConfig = {
+    ...config,
+    cashDenominations: Array.isArray(config.cashDenominations) && config.cashDenominations.length > 0
+      ? config.cashDenominations
+      : [{ value: 100, label: '100' }] // Valor predeterminado si no hay denominaciones
+  };
+  
   const [name, setName] = useState('');
   const [orderType, setOrderType] = useState('delivery'); // Changed default to delivery
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash'); // cash or transfer
-  const [cashAmount, setCashAmount] = useState(config.cashDenominations[0].value);
+  const [cashAmount, setCashAmount] = useState(safeConfig.cashDenominations[0].value);
   const [comments, setComments] = useState('');
   const [formErrors, setFormErrors] = useState({
     name: false,
@@ -25,7 +34,7 @@ export const useOrderForm = () => {
   const validateForm = () => {
     const errors = {
       name: !name.trim(),
-      phone: orderType === 'delivery' && (!phone.trim() || phone.length !== 10),
+      phone: (!phone.trim() || phone.length !== 10),
       address: orderType === 'delivery' && !address.trim()
     };
     
@@ -60,8 +69,9 @@ export const useOrderForm = () => {
     message += `🧑 *Cliente:* ${name}\n`;
     message += `🛵 *Tipo:* ${orderType === 'pickup' ? 'Para recoger' : 'Delivery'}\n`;
     
+    message += `📞 *Teléfono:* ${phone}\n`;
+    
     if (orderType === 'delivery') {
-      message += `📞 *Teléfono:* ${phone}\n`;
       message += `📍 *Dirección:* ${address}\n`;
     }
     
@@ -87,8 +97,9 @@ export const useOrderForm = () => {
     message += `\n🧾 *Total:* ${formatCurrency(totalAmount)}\n\n`;
     message += '¡Gracias por tu pedido! Lo estaremos preparando pronto.';
     
-    // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${config.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    // Create WhatsApp URL with safe access to config.whatsappNumber
+    const whatsappNumber = config.whatsappNumber || '';
+    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
     
     // Open WhatsApp in a new tab
     window.open(whatsappUrl, '_blank');

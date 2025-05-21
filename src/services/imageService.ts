@@ -1,4 +1,4 @@
-import supabase, { supabaseAdmin } from '../lib/supabase';
+import { getSupabase, getSupabaseAdmin } from '../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
 // Nombre del bucket para almacenar imágenes
@@ -8,6 +8,7 @@ const BUCKET_NAME = 'menu-images';
 export const initializeImageStorage = async () => {
   try {
     // Verificar si el bucket existe
+    const supabase = await getSupabase();
     const { data: buckets, error: bucketsError } = await supabase
       .storage
       .listBuckets();
@@ -19,6 +20,7 @@ export const initializeImageStorage = async () => {
     
     // Si el bucket no existe, crearlo
     if (!buckets?.find(b => b.name === BUCKET_NAME)) {
+      const supabaseAdmin = await getSupabaseAdmin();
       const { error: createError } = await supabaseAdmin
         .storage
         .createBucket(BUCKET_NAME, {
@@ -85,6 +87,9 @@ export const uploadImage = async (file: File) => {
       extensiónDetectada: fileExt
     });
     
+    // Obtener el cliente admin de Supabase
+    const supabaseAdmin = await getSupabaseAdmin();
+    
     // Subir archivo a Supabase Storage usando supabaseAdmin para tener permisos suficientes
     const { data, error } = await supabaseAdmin
       .storage
@@ -118,6 +123,9 @@ export const uploadImage = async (file: File) => {
 // Función para eliminar una imagen
 export const deleteImage = async (path: string) => {
   try {
+    // Obtener el cliente admin de Supabase
+    const supabaseAdmin = await getSupabaseAdmin();
+    
     const { error } = await supabaseAdmin
       .storage
       .from(BUCKET_NAME)

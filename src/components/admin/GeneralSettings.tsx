@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface GeneralSettingsProps {
   config: {
-    restaurantName: string;
-    whatsappNumber: string;
-    currency: string;
-    openingHours: string;
-    footerText: string;
-    cashDenominations: {
+    restaurantName?: string;
+    whatsappNumber?: string;
+    currency?: string;
+    openingHours?: string;
+    footerText?: string;
+    cashDenominations?: {
       value: number;
       label: string;
     }[];
@@ -28,6 +28,49 @@ interface GeneralSettingsProps {
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) => {
   const [cashValue, setCashValue] = useState<string>('');
   const [cashLabel, setCashLabel] = useState<string>('');
+  
+  // Estados locales para los campos principales
+  const [localSettings, setLocalSettings] = useState({
+    restaurantName: '',
+    whatsappNumber: '',
+    currency: '',
+    openingHours: '',
+    footerText: '',
+    cashDenominations: [] as {value: number, label: string}[]
+  });
+  
+  // Actualizar estados locales cuando cambia config
+  useEffect(() => {
+    console.log('Config recibido en GeneralSettings:', config);
+    if (config) {
+      // Asegurar que config siempre sea un objeto válido
+      const safeConfig = config || {};
+      
+      setLocalSettings({
+        restaurantName: safeConfig.restaurantName || '',
+        whatsappNumber: safeConfig.whatsappNumber || '',
+        currency: safeConfig.currency || '',
+        openingHours: safeConfig.openingHours || '',
+        footerText: safeConfig.footerText || '',
+        cashDenominations: Array.isArray(safeConfig.cashDenominations) ? safeConfig.cashDenominations : []
+      });
+    }
+  }, [config]);
+
+  // Función que maneja los cambios asegurando que respetamos los tipos
+  const handleConfigChange = (field: string, value: any) => {
+    // Actualizar estado local
+    setLocalSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Enviar todos los cambios al componente padre
+    onChange({
+      ...localSettings,
+      [field]: value
+    });
+  };
 
   const handleCashDenominationAdd = () => {
     const value = parseFloat(cashValue);
@@ -42,20 +85,17 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
     }
 
     // Verificar si ya existe
-    if (config.cashDenominations.some(item => item.value === value)) {
+    if (localSettings.cashDenominations.some(item => item.value === value)) {
       alert('Ya existe una denominación con este valor');
       return;
     }
 
     const newDenominations = [
-      ...config.cashDenominations, 
+      ...localSettings.cashDenominations, 
       { value, label: cashLabel }
     ].sort((a, b) => a.value - b.value);
 
-    onChange({
-      ...config,
-      cashDenominations: newDenominations
-    });
+    handleConfigChange('cashDenominations', newDenominations);
 
     // Limpiar los campos
     setCashValue('');
@@ -63,13 +103,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
   };
 
   const handleCashDenominationRemove = (index: number) => {
-    const newDenominations = [...config.cashDenominations];
+    const newDenominations = [...localSettings.cashDenominations];
     newDenominations.splice(index, 1);
     
-    onChange({
-      ...config,
-      cashDenominations: newDenominations
-    });
+    handleConfigChange('cashDenominations', newDenominations);
   };
 
   return (
@@ -81,10 +118,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
           <label className="block text-sm font-medium mb-1">Nombre del Restaurante</label>
           <input
             type="text"
-            value={config.restaurantName}
-            onChange={(e) => onChange({ ...config, restaurantName: e.target.value })}
+            value={localSettings.restaurantName}
+            onChange={(e) => handleConfigChange('restaurantName', e.target.value)}
             className="w-full p-2 border border-gray-300 rounded"
-            placeholder="Ej: Mi Restaurante"
+            placeholder="Ingrese el nombre del restaurante"
           />
         </div>
         
@@ -92,8 +129,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
           <label className="block text-sm font-medium mb-1">Número de WhatsApp</label>
           <input
             type="text"
-            value={config.whatsappNumber}
-            onChange={(e) => onChange({ ...config, whatsappNumber: e.target.value })}
+            value={localSettings.whatsappNumber}
+            onChange={(e) => handleConfigChange('whatsappNumber', e.target.value)}
             className="w-full p-2 border border-gray-300 rounded"
             placeholder="Ej: 123456789 (sin espacios ni símbolos)"
           />
@@ -106,8 +143,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
           <label className="block text-sm font-medium mb-1">Símbolo de Moneda</label>
           <input
             type="text"
-            value={config.currency}
-            onChange={(e) => onChange({ ...config, currency: e.target.value })}
+            value={localSettings.currency}
+            onChange={(e) => handleConfigChange('currency', e.target.value)}
             className="w-full p-2 border border-gray-300 rounded"
             placeholder="Ej: $"
           />
@@ -117,8 +154,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
           <label className="block text-sm font-medium mb-1">Horario de Apertura</label>
           <input
             type="text"
-            value={config.openingHours}
-            onChange={(e) => onChange({ ...config, openingHours: e.target.value })}
+            value={localSettings.openingHours}
+            onChange={(e) => handleConfigChange('openingHours', e.target.value)}
             className="w-full p-2 border border-gray-300 rounded"
             placeholder="Ej: 9:00 AM - 10:00 PM"
           />
@@ -129,16 +166,13 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
         <label className="block text-sm font-medium mb-1">Texto del Pie de Página</label>
         <input
           type="text"
-          value={config.footerText || ''}
-          onChange={(e) => {
-            console.log('Nuevo valor de footerText:', e.target.value);
-            onChange({ ...config, footerText: e.target.value })
-          }}
+          value={localSettings.footerText}
+          onChange={(e) => handleConfigChange('footerText', e.target.value)}
           className="w-full p-2 border border-gray-300 rounded"
           placeholder="Ej: © 2023 Mi Restaurante. Todos los derechos reservados."
         />
         <p className="text-xs text-gray-500 mt-1">
-          Este texto se mostrará en el pie de página de su sitio web. Se carga desde la columna footer_text en Supabase.
+          Este texto se mostrará en el pie de página de su sitio web.
         </p>
       </div>
       
@@ -199,8 +233,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {config.cashDenominations.length > 0 ? (
-                config.cashDenominations.map((denom, index) => (
+              {localSettings.cashDenominations.length > 0 ? (
+                localSettings.cashDenominations.map((denom, index) => (
                   <tr key={index}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {denom.value}

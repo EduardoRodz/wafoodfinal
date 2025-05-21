@@ -19,6 +19,7 @@ import { initializeImageStorage } from '../services/storageService';
 interface ConfigContextType {
   config: typeof initialConfig;
   isLoading: boolean;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   tabLoading: boolean;
   setTabLoading: React.Dispatch<React.SetStateAction<boolean>>;
   saveConfig: (newConfig: typeof initialConfig) => Promise<boolean>;
@@ -39,6 +40,7 @@ interface ConfigContextType {
 const ConfigContext = createContext<ConfigContextType>({
   config: initialConfig,
   isLoading: true,
+  setIsLoading: () => {},
   tabLoading: false,
   setTabLoading: () => {},
   saveConfig: async () => false,
@@ -148,75 +150,126 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     try {
       // Establecer estado de carga
       setTabLoading(true);
+      console.log(`Iniciando carga de sección: ${section}`);
       
-      // Si está cargando la sección del menú y ya está marcada como cargada, no hacemos nada
-      if (section === 'menu' && sectionLoaded.menu) {
-        console.log('La sección de menú ya está marcada como cargada, usando caché...');
+      // Función para verificar si una sección tiene datos válidos
+      const hasValidData = (sectionName: 'site' | 'appearance' | 'menu') => {
+        if (sectionName === 'site') {
+          const valid = Boolean(currentConfig.restaurantName && currentConfig.whatsappNumber && currentConfig.currency);
+          console.log(`Validación site_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
+          if (!valid) {
+            console.log('Datos faltantes en site_config:', {
+              restaurantName: currentConfig.restaurantName ? 'OK' : 'FALTA',
+              whatsappNumber: currentConfig.whatsappNumber ? 'OK' : 'FALTA',
+              currency: currentConfig.currency ? 'OK' : 'FALTA'
+            });
+          }
+          return valid;
+        } else if (sectionName === 'appearance') {
+          const valid = Boolean(
+            currentConfig.theme && 
+            currentConfig.theme.primaryColor && 
+            currentConfig.theme.backgroundColor
+          );
+          console.log(`Validación appearance_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
+          if (!valid) {
+            console.log('Datos faltantes en appearance_config:', {
+              theme: currentConfig.theme ? 'OK' : 'FALTA',
+              primaryColor: currentConfig.theme?.primaryColor ? 'OK' : 'FALTA',
+              backgroundColor: currentConfig.theme?.backgroundColor ? 'OK' : 'FALTA'
+            });
+          }
+          return valid;
+        } else if (sectionName === 'menu') {
+          const valid = Array.isArray(currentConfig.categories) && currentConfig.categories.length > 0;
+          console.log(`Validación menu: ${valid ? 'COMPLETO' : 'INCOMPLETO'} (${currentConfig.categories.length} categorías)`);
+          return valid;
+        }
+        return false;
+      };
+      
+      // Si está cargando la sección y ya está marcada como cargada Y tiene datos válidos, no hacemos nada
+      if (section !== 'all' && sectionLoaded[section] && hasValidData(section)) {
+        console.log(`La sección ${section} ya está cargada y tiene datos válidos, usando caché...`);
         setTabLoading(false);
         return;
+      } else if (section !== 'all' && sectionLoaded[section]) {
+        console.log(`La sección ${section} está marcada como cargada pero faltan datos, recargando...`);
       }
       
       let updatedConfig = { ...currentConfig };
       let needsUpdate = false;
 
       // Cargar solo las secciones necesarias
-      if ((section === 'site' || section === 'all') && !sectionLoaded.site) {
-        console.log('Cargando configuración del sitio...');
+      if ((section === 'site' || section === 'all') && (!sectionLoaded.site || !hasValidData('site'))) {
+        console.log('Cargando configuración del sitio desde Supabase...');
         // Cargar configuración del sitio
         const siteConfig = await getSiteConfig();
         // Almacenar en caché
         cachedData.current.siteConfig = siteConfig;
         cachedData.current.lastFetchTime.site = Date.now();
         
+        // Usar directamente los valores recibidos de la base de datos
         updatedConfig = {
           ...updatedConfig,
-          restaurantName: siteConfig.restaurant_name,
-          whatsappNumber: siteConfig.whatsapp_number,
-          currency: siteConfig.currency,
-          openingHours: siteConfig.opening_hours,
+          restaurantName: siteConfig.restaurant_name || '',
+          whatsappNumber: siteConfig.whatsapp_number || '',
+          currency: siteConfig.currency || '',
+          openingHours: siteConfig.opening_hours || '',
           footerText: siteConfig.footer_text || '',
         };
+        console.log('Datos de site_config cargados:', {
+          restaurantName: updatedConfig.restaurantName,
+          whatsappNumber: updatedConfig.whatsappNumber,
+          currency: updatedConfig.currency
+        });
         needsUpdate = true;
         setSectionLoaded(prev => ({...prev, site: true}));
       }
       
-      if ((section === 'appearance' || section === 'all') && !sectionLoaded.appearance) {
-        console.log('Cargando configuración de apariencia...');
+      if ((section === 'appearance' || section === 'all') && (!sectionLoaded.appearance || !hasValidData('appearance'))) {
+        console.log('Cargando configuración de apariencia desde Supabase...');
         // Cargar configuración de apariencia
         const appearanceConfig = await getAppearanceConfig();
         // Almacenar en caché
         cachedData.current.appearanceConfig = appearanceConfig;
         cachedData.current.lastFetchTime.appearance = Date.now();
         
+        // Validar que los datos recibidos contengan al menos los campos más importantes
+        console.log('Datos de apariencia recibidos:', appearanceConfig);
+        
+        // Usar directamente los valores recibidos de la base de datos, con fallbacks
         updatedConfig = {
           ...updatedConfig,
           theme: {
-            primaryColor: appearanceConfig.primary_color,
-            accentColor: appearanceConfig.accent_color,
-            textColor: appearanceConfig.text_color,
-            backgroundColor: appearanceConfig.background_color,
-            cartButtonColor: appearanceConfig.cart_button_color,
-            floatingCartButtonColor: appearanceConfig.floating_cart_button_color
+            primaryColor: appearanceConfig.primary_color || '#003b29',
+            accentColor: appearanceConfig.accent_color || '#4caf50',
+            textColor: appearanceConfig.text_color || '#333333',
+            backgroundColor: appearanceConfig.background_color || '#ffffff',
+            cartButtonColor: appearanceConfig.cart_button_color || '#003b29',
+            floatingCartButtonColor: appearanceConfig.floating_cart_button_color || '#003b29'
           }
         };
+        console.log('Datos de theme aplicados:', updatedConfig.theme);
         needsUpdate = true;
         setSectionLoaded(prev => ({...prev, appearance: true}));
       }
       
-      if ((section === 'menu' || section === 'all') && !sectionLoaded.menu) {
-        console.log('Cargando datos del menú...');
+      if ((section === 'menu' || section === 'all') && (!sectionLoaded.menu || !hasValidData('menu'))) {
+        console.log('Cargando datos del menú desde Supabase...');
         
         try {
           // getMenuData ya implementa caché interna
-        const menuData = await getMenuData();
+          const menuData = await getMenuData();
           
-        updatedConfig = {
-          ...updatedConfig,
-          categories: menuData
-        };
+          // Usar directamente los datos del menú recibidos
+          updatedConfig = {
+            ...updatedConfig,
+            categories: menuData
+          };
           needsUpdate = true;
-        setSectionLoaded(prev => ({...prev, menu: true}));
-          console.log('Datos del menú cargados correctamente');
+          setSectionLoaded(prev => ({...prev, menu: true}));
+          console.log(`Datos del menú cargados: ${menuData.length} categorías`);
         } catch (menuError) {
           console.error('Error al cargar el menú:', menuError);
         }
@@ -224,13 +277,13 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       
       // Solo actualizar el estado si hubo cambios
       if (needsUpdate) {
-      setCurrentConfig(updatedConfig);
-        console.log(`Sección de configuración '${section}' actualizada correctamente`);
+        setCurrentConfig(updatedConfig);
+        console.log(`✅ Sección '${section}' actualizada correctamente`);
       } else {
-        console.log(`No fue necesario actualizar la sección '${section}', ya estaba cargada o sin cambios`);
+        console.log(`ℹ️ No fue necesario actualizar la sección '${section}', ya estaba cargada o sin cambios`);
       }
     } catch (error) {
-      console.error(`Error cargando sección '${section}' de configuración:`, error);
+      console.error(`❌ Error cargando sección '${section}' de configuración:`, error);
     } finally {
       setTabLoading(false);
     }
@@ -251,6 +304,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         const now = Date.now();
         
         if (completeConfig) {
+          // Usar directamente la configuración desde Supabase sin aplicar valores por defecto
           setCurrentConfig(completeConfig);
           
           // Extraer los datos específicos para la caché
@@ -285,16 +339,16 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           };
           
           // Marcar todas las secciones como cargadas
-        setSectionLoaded({
-          site: true,
-          appearance: true,
+          setSectionLoaded({
+            site: true,
+            appearance: true,
             menu: true
-        });
-        
-        // Actualizar metadatos del documento
+          });
+          
+          // Actualizar metadatos del documento
           updateDocumentMetadata(completeConfig.restaurantName);
-        
-          console.log('Configuración completa inicial cargada (sin consultas duplicadas)');
+          
+          console.log('Configuración completa inicial cargada desde Supabase (datos originales sin modificar)');
         }
         
         // Inicializar el almacenamiento de imágenes solo una vez
@@ -550,6 +604,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     <ConfigContext.Provider value={{ 
       config: currentConfig, 
       isLoading,
+      setIsLoading,
       tabLoading,
       setTabLoading,
       saveConfig, 
