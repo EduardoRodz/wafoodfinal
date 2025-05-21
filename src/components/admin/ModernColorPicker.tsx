@@ -25,28 +25,109 @@ const defaultPresets = [
   '#304ffe', '#00bfa5', '#d50000', '#6200ea', '#aeea00'
 ];
 
+// Función para validar formato hex
+const isValidHex = (color: string) => {
+  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
+};
+
+// Función para asegurar que siempre tengamos un valor hex válido
+const getSafeColor = (color: string | undefined | null): string => {
+  if (!color) return '#000000';
+  
+  // Si es un valor hex válido, usarlo
+  if (isValidHex(color)) return color;
+  
+  // Si es rgba, extraer componentes y convertir a hex
+  if (color.startsWith('rgba')) {
+    const match = color.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+    if (match) {
+      const r = parseInt(match[1]);
+      const g = parseInt(match[2]);
+      const b = parseInt(match[3]);
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+  }
+  
+  // Si es rgb, extraer componentes y convertir a hex
+  if (color.startsWith('rgb')) {
+    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      const r = parseInt(match[1]);
+      const g = parseInt(match[2]);
+      const b = parseInt(match[3]);
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+  }
+  
+  // Valor por defecto
+  console.warn(`ModernColorPicker - Color no válido: ${color}, usando negro por defecto`);
+  return '#000000';
+};
+
 const ModernColorPicker: React.FC<ModernColorPickerProps> = ({ 
   label, 
   value = '#000000',
   onChange
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [localColor, setLocalColor] = useState(value || '#000000');
+  const [localColor, setLocalColor] = useState(getSafeColor(value));
   const [opacity, setOpacity] = useState(100);
-  const [colorWithOpacity, setColorWithOpacity] = useState(value || '#000000');
+  const [colorWithOpacity, setColorWithOpacity] = useState(getSafeColor(value));
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Función para notificar cambios al componente padre
+  const notifyParent = (finalColor: string) => {
+    console.log(`ModernColorPicker - Enviando color al padre:`, finalColor);
+    setColorWithOpacity(finalColor);
+    onChange(finalColor);
+  };
+
+  // Función para aplicar opacidad al color hex
+  const applyOpacity = (hexColor: string, opacityValue: number): string => {
+    if (opacityValue === 100) return hexColor;
+    
+    try {
+      const r = parseInt(hexColor.substring(1, 3), 16);
+      const g = parseInt(hexColor.substring(3, 5), 16);
+      const b = parseInt(hexColor.substring(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${opacityValue / 100})`;
+    } catch (error) {
+      console.error('Error al aplicar opacidad:', error);
+      return hexColor;
+    }
+  };
 
   // Actualizar color local cuando cambia el prop value
   useEffect(() => {
     if (value) {
-      setLocalColor(value);
+      console.log(`ModernColorPicker - Actualizando color desde prop:`, value);
       
+      // Si es un formato hex, usarlo directamente
+      if (isValidHex(value)) {
+        setLocalColor(value);
+        setOpacity(100); // Reset opacity para colores hex
+      }
       // Extraer opacidad si está en formato rgba
-      if (value.startsWith('rgba')) {
+      else if (value.startsWith('rgba')) {
         const match = value.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
         if (match && match[4]) {
+          // Convertir componentes RGB a hex
+          const r = parseInt(match[1]);
+          const g = parseInt(match[2]);
+          const b = parseInt(match[3]);
+          const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+          
+          setLocalColor(hexColor);
           setOpacity(parseFloat(match[4]) * 100);
+          console.log(`ModernColorPicker - Extraído desde rgba: hex=${hexColor}, opacity=${parseFloat(match[4]) * 100}%`);
+        } else {
+          // Si no se puede parsear, usar un valor seguro
+          setLocalColor(getSafeColor(value));
+          setOpacity(100);
         }
+      } else {
+        // Para otros formatos, intentar obtener un valor seguro
+        setLocalColor(getSafeColor(value));
       }
     }
   }, [value]);
@@ -58,17 +139,15 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
     }
     
     debounceTimeoutRef.current = setTimeout(() => {
-      // Decidir si usar hex o rgba
-      let finalColor = localColor;
-      if (opacity < 100) {
-        const r = parseInt(localColor.substring(1, 3), 16);
-        const g = parseInt(localColor.substring(3, 5), 16);
-        const b = parseInt(localColor.substring(5, 7), 16);
-        finalColor = `rgba(${r}, ${g}, ${b}, ${opacity / 100})`;
+      if (!isValidHex(localColor)) {
+        console.warn('ModernColorPicker - Color local no válido:', localColor);
+        return;
       }
       
-      setColorWithOpacity(finalColor);
-      onChange(finalColor);
+      // Decidir si usar hex o rgba
+      const finalColor = applyOpacity(localColor, opacity);
+      console.log(`ModernColorPicker - Color final con opacidad:`, finalColor);
+      notifyParent(finalColor);
     }, 100);
     
     return () => {
@@ -97,6 +176,28 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
   // Manejar cambio desde presets
   const handlePresetClick = (preset: string) => {
     setLocalColor(preset);
+    setOpacity(100); // Reset opacity al elegir un preset
+    // Notificar inmediatamente al padre
+    notifyParent(preset);
+    setIsOpen(false);
+  };
+  
+  // Manejar cambio de color desde el picker
+  const handleColorChange = (newColor: string) => {
+    if (isValidHex(newColor)) {
+      setLocalColor(newColor);
+    }
+  };
+
+  // Manejar cambio de opacidad
+  const handleOpacityChange = (newOpacity: number) => {
+    setOpacity(newOpacity);
+  };
+  
+  // Manejar click en botón Aplicar
+  const handleApplyClick = () => {
+    const finalColor = applyOpacity(localColor, opacity);
+    notifyParent(finalColor);
     setIsOpen(false);
   };
   
@@ -109,7 +210,7 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
             className="w-5 h-5 rounded border border-gray-300 shadow-sm"
             style={{ backgroundColor: colorWithOpacity }}
           />
-          <span className="text-xs font-mono uppercase">{value}</span>
+          <span className="text-xs font-mono uppercase">{colorWithOpacity}</span>
         </div>
       </div>
       
@@ -144,7 +245,7 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
               <div className="mb-4">
                 <HexColorPicker 
                   color={localColor} 
-                  onChange={setLocalColor} 
+                  onChange={handleColorChange} 
                   className="w-full"
                 />
               </div>
@@ -154,7 +255,7 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
                   <label className="block text-xs mb-1">Hex</label>
                   <HexColorInput
                     color={localColor}
-                    onChange={setLocalColor}
+                    onChange={handleColorChange}
                     prefixed
                     className="w-full p-1 text-sm border border-gray-300 rounded"
                   />
@@ -172,7 +273,7 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
                   min={0}
                   max={100}
                   step={1}
-                  onValueChange={(value) => setOpacity(value[0])}
+                  onValueChange={(value) => handleOpacityChange(value[0])}
                   className="w-full"
                 />
               </div>
@@ -188,7 +289,7 @@ const ModernColorPicker: React.FC<ModernColorPickerProps> = ({
                 <Button 
                   className="bg-blue-600 hover:bg-blue-700"
                   size="sm" 
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleApplyClick}
                 >
                   <Check className="h-4 w-4 mr-1" /> Aplicar
                 </Button>

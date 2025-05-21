@@ -1,17 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation, Outlet } from 'react-router-dom';
 import Index from './pages/Index';
-import AdminPanel from './pages/AdminPanel';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ConfirmError from './pages/ConfirmError';
 import Installer from './pages/Installer';
+import Favorites from './pages/Favorites';
+import AdminPanel from './pages/AdminPanel';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ConfigProvider } from './context/ConfigContext';
 import { AuthProvider } from './context/AuthContext';
+import { CartProvider } from './context/CartContext';
+import { FavoritesProvider } from './context/FavoritesContext';
 import { getInstallationStatus } from './services/configService';
+import AdminLayout from './components/admin/AdminLayout';
+
+// Importación diferida de componentes de administración
+const GeneralSettings = lazy(() => import('./components/admin/GeneralSettings'));
+const UserManager = lazy(() => import('./components/admin/UserManager'));
+const SystemStatus = lazy(() => import('./components/admin/SystemStatus'));
+const ImportExportData = lazy(() => import('./components/admin/ImportExportData'));
+const MenuItemEditor = lazy(() => import('./components/admin/MenuItemEditor'));
+const CategoryEditor = lazy(() => import('./components/admin/CategoryEditor'));
+const AppearanceEditor = lazy(() => import('./components/admin/AppearanceEditor'));
 
 import './App.css';
+
+// Componente de carga para Suspense
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center p-8 h-full">
+    <div className="w-10 h-10 border-4 border-t-primary rounded-full animate-spin" 
+         style={{ borderTopColor: '#003b29' }}></div>
+    <span className="ml-3">Cargando...</span>
+  </div>
+);
 
 // Componente para verificar si el instalador ya está completado
 const AppRoutes: React.FC = () => {
@@ -162,9 +184,6 @@ const AppRoutes: React.FC = () => {
     );
   }
 
-  // Verificar si estamos intentando acceder al adminpanel
-  const isAdminPath = location.pathname === '/adminpanel';
-
   return (
     <Routes>
       {/* Ruta del instalador - solo accesible si no se ha completado */}
@@ -173,15 +192,94 @@ const AppRoutes: React.FC = () => {
         element={isInstallerCompleted ? <Navigate to="/" replace /> : <Installer />} 
       />
       
-      {/* Panel de administración - protegido por autenticación */}
+      {/* Rutas del panel de administración - protegidas por autenticación */}
       <Route 
-        path="/adminpanel" 
+        path="/admin" 
         element={
           !isInstallerCompleted ? 
           <Navigate to="/instalador" replace /> : 
           <ProtectedRoute>
-            <AdminPanel />
+            <Outlet />
           </ProtectedRoute>
+        }
+      >
+        {/* Redirección de /admin a /admin/menu */}
+        <Route index element={<Navigate to="/admin/menu" replace />} />
+        
+        {/* Redirección de /adminpanel legacy a /admin/menu */}
+        <Route path="panel" element={<Navigate to="/admin/menu" replace />} />
+        
+        {/* Rutas específicas del panel de administración */}
+        <Route path="menu" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Menú" hasChanges={false}>
+              <MenuItemEditor />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="categorias" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Categorías" hasChanges={false}>
+              <CategoryEditor />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="configuracion" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Configuración General" hasChanges={false}>
+              <GeneralSettings />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="apariencia" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Apariencia" hasChanges={false}>
+              <AppearanceEditor />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="usuarios" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Usuarios" hasChanges={false}>
+              <UserManager />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="sistema" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Estado del Sistema" hasChanges={false}>
+              <SystemStatus />
+            </AdminLayout>
+          </Suspense>
+        } />
+        
+        <Route path="importar" element={
+          <Suspense fallback={<LoadingFallback />}>
+            <AdminLayout title="Importar/Exportar" hasChanges={false}>
+              <ImportExportData />
+            </AdminLayout>
+          </Suspense>
+        } />
+      </Route>
+      
+      {/* Ruta legacy para compatibilidad con enlaces antiguos */}
+      <Route 
+        path="/adminpanel" 
+        element={<Navigate to="/admin/menu" replace />}
+      />
+      
+      {/* Ruta de favoritos */}
+      <Route 
+        path="/favoritos" 
+        element={
+          !isInstallerCompleted ? 
+          <Navigate to="/instalador" replace /> : 
+          <Favorites />
         } 
       />
       
@@ -211,7 +309,11 @@ const App: React.FC = () => {
     <Router>
       <ConfigProvider>
         <AuthProvider>
-          <AppRoutes />
+          <CartProvider>
+            <FavoritesProvider>
+              <AppRoutes />
+            </FavoritesProvider>
+          </CartProvider>
         </AuthProvider>
       </ConfigProvider>
     </Router>

@@ -10,20 +10,12 @@ export const useOrderForm = () => {
   const formatCurrency = useFormatCurrency();
   const { toast } = useToast();
   
-  // Asegurar que config.cashDenominations exista y tenga al menos un elemento
-  const safeConfig = {
-    ...config,
-    cashDenominations: Array.isArray(config.cashDenominations) && config.cashDenominations.length > 0
-      ? config.cashDenominations
-      : [{ value: 100, label: '100' }] // Valor predeterminado si no hay denominaciones
-  };
-  
   const [name, setName] = useState('');
   const [orderType, setOrderType] = useState('delivery'); // Changed default to delivery
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash'); // cash or transfer
-  const [cashAmount, setCashAmount] = useState(safeConfig.cashDenominations[0].value);
+  const [cashAmount, setCashAmount] = useState(100); // Valor predeterminado
   const [comments, setComments] = useState('');
   const [formErrors, setFormErrors] = useState({
     name: false,

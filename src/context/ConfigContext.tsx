@@ -150,15 +150,15 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     try {
       // Establecer estado de carga
       setTabLoading(true);
-      console.log(`Iniciando carga de sección: ${section}`);
+      console.log(`ConfigContext - Iniciando carga de sección: ${section}`);
       
       // Función para verificar si una sección tiene datos válidos
       const hasValidData = (sectionName: 'site' | 'appearance' | 'menu') => {
         if (sectionName === 'site') {
           const valid = Boolean(currentConfig.restaurantName && currentConfig.whatsappNumber && currentConfig.currency);
-          console.log(`Validación site_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
+          console.log(`ConfigContext - Validación site_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
           if (!valid) {
-            console.log('Datos faltantes en site_config:', {
+            console.log('ConfigContext - Datos faltantes en site_config:', {
               restaurantName: currentConfig.restaurantName ? 'OK' : 'FALTA',
               whatsappNumber: currentConfig.whatsappNumber ? 'OK' : 'FALTA',
               currency: currentConfig.currency ? 'OK' : 'FALTA'
@@ -171,9 +171,9 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
             currentConfig.theme.primaryColor && 
             currentConfig.theme.backgroundColor
           );
-          console.log(`Validación appearance_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
+          console.log(`ConfigContext - Validación appearance_config: ${valid ? 'COMPLETO' : 'INCOMPLETO'}`);
           if (!valid) {
-            console.log('Datos faltantes en appearance_config:', {
+            console.log('ConfigContext - Datos faltantes en appearance_config:', {
               theme: currentConfig.theme ? 'OK' : 'FALTA',
               primaryColor: currentConfig.theme?.primaryColor ? 'OK' : 'FALTA',
               backgroundColor: currentConfig.theme?.backgroundColor ? 'OK' : 'FALTA'
@@ -182,19 +182,65 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           return valid;
         } else if (sectionName === 'menu') {
           const valid = Array.isArray(currentConfig.categories) && currentConfig.categories.length > 0;
-          console.log(`Validación menu: ${valid ? 'COMPLETO' : 'INCOMPLETO'} (${currentConfig.categories.length} categorías)`);
+          console.log(`ConfigContext - Validación menu: ${valid ? 'COMPLETO' : 'INCOMPLETO'} (${currentConfig.categories.length} categorías)`);
           return valid;
         }
         return false;
       };
       
-      // Si está cargando la sección y ya está marcada como cargada Y tiene datos válidos, no hacemos nada
+      // Para la sección "appearance", siempre forzar la carga desde la base de datos
+      if (section === 'appearance') {
+        console.log('ConfigContext - Forzando carga de datos de apariencia desde la base de datos...');
+        
+        // Cargar siempre los datos de apariencia, ignorando caché
+        let updatedConfig = { ...currentConfig };
+        
+        try {
+          // Cargar configuración de apariencia directamente
+          const appearanceConfig = await getAppearanceConfig();
+          console.log('ConfigContext - Datos de apariencia cargados directamente:', appearanceConfig);
+          
+          // Usar directamente los valores recibidos de la base de datos, asegurando valores por defecto
+          updatedConfig = {
+            ...updatedConfig,
+            theme: {
+              primaryColor: appearanceConfig.primary_color || '#003b29',
+              accentColor: appearanceConfig.accent_color || '#4caf50',
+              textColor: appearanceConfig.text_color || '#333333',
+              backgroundColor: appearanceConfig.background_color || '#ffffff',
+              cartButtonColor: appearanceConfig.cart_button_color || '#003b29',
+              floatingCartButtonColor: appearanceConfig.floating_cart_button_color || '#003b29'
+            }
+          };
+          
+          // Actualizar estado y caché
+          setCurrentConfig(updatedConfig);
+          
+          // Almacenar en caché con timestamp actual
+          cachedData.current.appearanceConfig = appearanceConfig;
+          cachedData.current.lastFetchTime.appearance = Date.now();
+          
+          // Marcar como cargado
+          setSectionLoaded(prev => ({...prev, appearance: true}));
+          
+          console.log('ConfigContext - ✅ Datos de apariencia actualizados correctamente');
+          
+        } catch (error) {
+          console.error('ConfigContext - Error al cargar datos de apariencia:', error);
+        } finally {
+          setTabLoading(false);
+        }
+        
+        return;
+      }
+      
+      // Si está cargando otras secciones y ya está marcada como cargada Y tiene datos válidos, no hacemos nada
       if (section !== 'all' && sectionLoaded[section] && hasValidData(section)) {
-        console.log(`La sección ${section} ya está cargada y tiene datos válidos, usando caché...`);
+        console.log(`ConfigContext - La sección ${section} ya está cargada y tiene datos válidos, usando caché...`);
         setTabLoading(false);
         return;
       } else if (section !== 'all' && sectionLoaded[section]) {
-        console.log(`La sección ${section} está marcada como cargada pero faltan datos, recargando...`);
+        console.log(`ConfigContext - La sección ${section} está marcada como cargada pero faltan datos, recargando...`);
       }
       
       let updatedConfig = { ...currentConfig };
@@ -202,7 +248,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       // Cargar solo las secciones necesarias
       if ((section === 'site' || section === 'all') && (!sectionLoaded.site || !hasValidData('site'))) {
-        console.log('Cargando configuración del sitio desde Supabase...');
+        console.log('ConfigContext - Cargando configuración del sitio desde Supabase...');
         // Cargar configuración del sitio
         const siteConfig = await getSiteConfig();
         // Almacenar en caché
@@ -218,7 +264,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           openingHours: siteConfig.opening_hours || '',
           footerText: siteConfig.footer_text || '',
         };
-        console.log('Datos de site_config cargados:', {
+        console.log('ConfigContext - Datos de site_config cargados:', {
           restaurantName: updatedConfig.restaurantName,
           whatsappNumber: updatedConfig.whatsappNumber,
           currency: updatedConfig.currency
@@ -227,8 +273,8 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         setSectionLoaded(prev => ({...prev, site: true}));
       }
       
-      if ((section === 'appearance' || section === 'all') && (!sectionLoaded.appearance || !hasValidData('appearance'))) {
-        console.log('Cargando configuración de apariencia desde Supabase...');
+      if (section === 'all' && (!sectionLoaded.appearance || !hasValidData('appearance'))) {
+        console.log('ConfigContext - Cargando configuración de apariencia desde Supabase (all)...');
         // Cargar configuración de apariencia
         const appearanceConfig = await getAppearanceConfig();
         // Almacenar en caché
@@ -236,7 +282,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         cachedData.current.lastFetchTime.appearance = Date.now();
         
         // Validar que los datos recibidos contengan al menos los campos más importantes
-        console.log('Datos de apariencia recibidos:', appearanceConfig);
+        console.log('ConfigContext - Datos de apariencia recibidos:', appearanceConfig);
         
         // Usar directamente los valores recibidos de la base de datos, con fallbacks
         updatedConfig = {
@@ -250,13 +296,13 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
             floatingCartButtonColor: appearanceConfig.floating_cart_button_color || '#003b29'
           }
         };
-        console.log('Datos de theme aplicados:', updatedConfig.theme);
+        console.log('ConfigContext - Datos de theme aplicados:', updatedConfig.theme);
         needsUpdate = true;
         setSectionLoaded(prev => ({...prev, appearance: true}));
       }
       
       if ((section === 'menu' || section === 'all') && (!sectionLoaded.menu || !hasValidData('menu'))) {
-        console.log('Cargando datos del menú desde Supabase...');
+        console.log('ConfigContext - Cargando datos del menú desde Supabase...');
         
         try {
           // getMenuData ya implementa caché interna
@@ -269,21 +315,21 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           };
           needsUpdate = true;
           setSectionLoaded(prev => ({...prev, menu: true}));
-          console.log(`Datos del menú cargados: ${menuData.length} categorías`);
+          console.log(`ConfigContext - Datos del menú cargados: ${menuData.length} categorías`);
         } catch (menuError) {
-          console.error('Error al cargar el menú:', menuError);
+          console.error('ConfigContext - Error al cargar el menú:', menuError);
         }
       }
       
       // Solo actualizar el estado si hubo cambios
       if (needsUpdate) {
         setCurrentConfig(updatedConfig);
-        console.log(`✅ Sección '${section}' actualizada correctamente`);
+        console.log(`ConfigContext - ✅ Sección '${section}' actualizada correctamente`);
       } else {
-        console.log(`ℹ️ No fue necesario actualizar la sección '${section}', ya estaba cargada o sin cambios`);
+        console.log(`ConfigContext - ℹ️ No fue necesario actualizar la sección '${section}', ya estaba cargada o sin cambios`);
       }
     } catch (error) {
-      console.error(`❌ Error cargando sección '${section}' de configuración:`, error);
+      console.error(`ConfigContext - ❌ Error cargando sección '${section}' de configuración:`, error);
     } finally {
       setTabLoading(false);
     }
@@ -294,7 +340,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     const loadInitialConfig = async () => {
       try {
         setIsLoading(true);
-        console.log('Cargando configuración inicial completa...');
+        console.log('ConfigContext - Cargando configuración inicial completa...');
         
         // Usamos la función getConfig que ya implementa la caché interna
         // Esto evitará múltiples llamadas a la BD 
@@ -348,13 +394,13 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           // Actualizar metadatos del documento
           updateDocumentMetadata(completeConfig.restaurantName);
           
-          console.log('Configuración completa inicial cargada desde Supabase (datos originales sin modificar)');
+          console.log('ConfigContext - Configuración completa inicial cargada desde Supabase (datos originales sin modificar)');
         }
         
         // Inicializar el almacenamiento de imágenes solo una vez
         await initializeImageStorage();
       } catch (error) {
-        console.error('Error cargando configuración inicial:', error);
+        console.error('ConfigContext - Error cargando configuración inicial:', error);
       } finally {
         setIsLoading(false);
       }
@@ -407,35 +453,73 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           }
           
           if (success) {
-            console.log('Configuración actualizada desde evento personalizado');
+            console.log('ConfigContext - Configuración actualizada desde evento personalizado');
           } else {
-            console.warn('Configuración actualizada con errores:', errors);
+            console.warn('ConfigContext - Configuración actualizada con errores:', errors);
           }
         } else {
           // Compatibilidad con el formato antiguo
         const newConfig = event.detail;
         setCurrentConfig(newConfig);
-          console.log('Configuración actualizada desde evento personalizado (formato antiguo)');
+          console.log('ConfigContext - Configuración actualizada desde evento personalizado (formato antiguo)');
         }
       } catch (error) {
-        console.error('Error al procesar el evento configSaved:', error);
+        console.error('ConfigContext - Error al procesar el evento configSaved:', error);
       }
     };
     
     // Escuchar eventos de menú guardado
     const handleMenuSaved = () => {
-      console.log('Evento menuSaved recibido - actualizando datos de menú');
+      console.log('ConfigContext - Evento menuSaved recibido - actualizando datos de menú');
       // En lugar de invalidar la caché y volver a cargar, utilizamos la caché
       // que ya ha sido actualizada en el servicio
       loadConfigSection('menu');
     };
+
+    // Escuchar eventos específicos de actualización de apariencia
+    const handleAppearanceConfigSaved = (event: CustomEvent<any>) => {
+      console.log('ConfigContext - Evento appearanceConfigSaved recibido');
+      if (event.detail) {
+        console.log('ConfigContext - Nuevos datos de apariencia recibidos:', event.detail);
+        
+        try {
+          // Actualizar directamente el estado con los nuevos valores
+          setCurrentConfig(prev => ({
+            ...prev,
+            theme: {
+              primaryColor: event.detail.primary_color || prev.theme.primaryColor,
+              accentColor: event.detail.accent_color || prev.theme.accentColor,
+              textColor: event.detail.text_color || prev.theme.textColor,
+              backgroundColor: event.detail.background_color || prev.theme.backgroundColor,
+              cartButtonColor: event.detail.cart_button_color || prev.theme.cartButtonColor,
+              floatingCartButtonColor: event.detail.floating_cart_button_color || prev.theme.floatingCartButtonColor
+            }
+          }));
+          
+          // Actualizar caché
+          cachedData.current.appearanceConfig = event.detail;
+          cachedData.current.lastFetchTime.appearance = Date.now();
+          
+          // Marcar como cargada
+          setSectionLoaded(prev => ({ ...prev, appearance: true }));
+          
+          console.log('ConfigContext - Datos de apariencia actualizados exitosamente');
+        } catch (error) {
+          console.error('ConfigContext - Error actualizando datos de apariencia:', error);
+          // Forzar recarga completa de la sección
+          loadConfigSection('appearance');
+        }
+      }
+    };
     
     window.addEventListener('configSaved', handleConfigSaved as EventListener);
     window.addEventListener('menuSaved', handleMenuSaved);
+    window.addEventListener('appearanceConfigSaved', handleAppearanceConfigSaved as EventListener);
     
     return () => {
       window.removeEventListener('configSaved', handleConfigSaved as EventListener);
       window.removeEventListener('menuSaved', handleMenuSaved);
+      window.removeEventListener('appearanceConfigSaved', handleAppearanceConfigSaved as EventListener);
     };
   }, [updateDocumentMetadata]);
 
@@ -483,7 +567,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       
       return saved;
     } catch (error) {
-      console.error('Error al guardar configuración:', error);
+      console.error('ConfigContext - Error al guardar configuración:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -525,7 +609,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       
       return saved;
     } catch (error) {
-      console.error('Error al guardar configuración del sitio:', error);
+      console.error('ConfigContext - Error al guardar configuración del sitio:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -536,38 +620,51 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const saveAppearanceOnly = async (appearance: any) => {
     try {
       setIsLoading(true);
-      const appearanceData = {
-        primary_color: appearance.primaryColor,
-        accent_color: appearance.accentColor,
-        text_color: appearance.textColor,
-        background_color: appearance.backgroundColor,
-        cart_button_color: appearance.cartButtonColor,
-        floating_cart_button_color: appearance.floatingCartButtonColor
+      console.log('ConfigContext - saveAppearanceOnly recibiendo datos:', appearance);
+      
+      // Verificación adicional para valores nulos o indefinidos
+      const cleanAppearance = {
+        primaryColor: appearance.primaryColor || '#003b29',
+        accentColor: appearance.accentColor || '#4caf50',
+        textColor: appearance.textColor || '#333333',
+        backgroundColor: appearance.backgroundColor || '#ffffff',
+        cartButtonColor: appearance.cartButtonColor || '#003b29',
+        floatingCartButtonColor: appearance.floatingCartButtonColor || '#003b29'
       };
+      
+      // Asegurar que los nombres de campos coincidan con la interfaz AppearanceConfig
+      const appearanceData = {
+        primary_color: cleanAppearance.primaryColor,
+        accent_color: cleanAppearance.accentColor,
+        text_color: cleanAppearance.textColor,
+        background_color: cleanAppearance.backgroundColor,
+        cart_button_color: cleanAppearance.cartButtonColor,
+        floating_cart_button_color: cleanAppearance.floatingCartButtonColor
+      };
+      
+      console.log('ConfigContext - Enviando datos de apariencia a la API:', appearanceData);
       
       const saved = await saveAppearanceConfig(appearanceData);
       
       if (saved) {
+        // Actualizar el estado local con los valores guardados
         setCurrentConfig(prev => ({
           ...prev,
-          theme: {
-            primaryColor: appearance.primaryColor,
-            accentColor: appearance.accentColor,
-            textColor: appearance.textColor,
-            backgroundColor: appearance.backgroundColor,
-            cartButtonColor: appearance.cartButtonColor,
-            floatingCartButtonColor: appearance.floatingCartButtonColor
-          }
+          theme: cleanAppearance
         }));
         
         // Actualizar caché
         cachedData.current.appearanceConfig = appearanceData;
         cachedData.current.lastFetchTime.appearance = Date.now();
+        
+        console.log('ConfigContext - Configuración de apariencia guardada y actualizada en estado local');
+      } else {
+        console.error('ConfigContext - Error al guardar configuración de apariencia');
       }
       
       return saved;
     } catch (error) {
-      console.error('Error al guardar configuración de apariencia:', error);
+      console.error('ConfigContext - Error al guardar configuración de apariencia:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -593,7 +690,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       
       return saved;
     } catch (error) {
-      console.error('Error al guardar menú:', error);
+      console.error('ConfigContext - Error al guardar menú:', error);
       return false;
     } finally {
       setIsLoading(false);

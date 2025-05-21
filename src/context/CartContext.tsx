@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { MenuItem } from '../config';
 
 interface CartItem extends MenuItem {
@@ -34,8 +34,34 @@ interface CartProviderProps {
   children: ReactNode;
 }
 
+// Clave para almacenar el carrito en localStorage
+const CART_STORAGE_KEY = 'wafood_cart_items';
+
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [items, setItems] = useState<CartItem[]>([]);
+  // Inicializar el estado desde localStorage si existe
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    
+    try {
+      const storedItems = localStorage.getItem(CART_STORAGE_KEY);
+      return storedItems ? JSON.parse(storedItems) : [];
+    } catch (error) {
+      console.error('Error al cargar el carrito desde localStorage:', error);
+      return [];
+    }
+  });
+
+  // Guardar en localStorage cuando cambia items
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+        console.log('Carrito guardado en localStorage:', items.length, 'elementos');
+      } catch (error) {
+        console.error('Error al guardar el carrito en localStorage:', error);
+      }
+    }
+  }, [items]);
 
   const totalAmount = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);

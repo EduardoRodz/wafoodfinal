@@ -5,6 +5,7 @@ import { useConfig } from '../context/ConfigContext';
 import { Plus, Minus } from 'lucide-react';
 import { Button } from './ui/button';
 import { useFormatCurrency } from '../utils/formatCurrency';
+import FavoriteButton from './FavoriteButton';
 
 interface OrderItemProps {
   item: MenuItem;
@@ -118,6 +119,11 @@ function OrderItem({ item }: OrderItemProps) {
           crossOrigin="anonymous"
           style={{ opacity: 0.9 }} // Inicio con opacidad menor para suavizar la transición
         />
+        
+        {/* Botón de favoritos */}
+        <div className="absolute top-2 right-2">
+          <FavoriteButton itemId={item.id} className="bg-white bg-opacity-70 p-1 rounded-full" />
+        </div>
       </div>
       
       <div className="p-3 sm:p-4 space-y-2">

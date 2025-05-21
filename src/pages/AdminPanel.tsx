@@ -32,10 +32,6 @@ interface EditableConfig {
     cartButtonColor: string;
     floatingCartButtonColor: string;
   };
-  cashDenominations: {
-    value: number;
-    label: string;
-  }[];
   categories: {
     id: string;
     name: string;
@@ -65,7 +61,6 @@ const fallbackConfig: EditableConfig = {
     cartButtonColor: "",
     floatingCartButtonColor: ""
   },
-  cashDenominations: [],
   categories: [],
   footerText: ""
 };
@@ -181,7 +176,6 @@ const AdminPanel: React.FC = () => {
             floatingCartButtonColor: ''
           },
           categories: Array.isArray(configCopy.categories) ? configCopy.categories : [],
-          cashDenominations: Array.isArray(configCopy.cashDenominations) ? configCopy.cashDenominations : []
         };
         
         setEditableConfig(safeConfig);
@@ -196,7 +190,7 @@ const AdminPanel: React.FC = () => {
     }
   }, [config]);
 
-  // Cargar datos específicos cuando cambia la pestaña activa
+  // Efecto para cargar los datos específicos cuando cambia la pestaña activa
   useEffect(() => {
     if (!user) return; // No hacer nada si no hay usuario
     
@@ -223,6 +217,20 @@ const AdminPanel: React.FC = () => {
           break;
         case 'appearance':
           sectionToLoad = 'appearance';
+          // Para la pestaña de apariencia, siempre forzar la recarga desde la base de datos
+          if (isComponentMounted.current) {
+            console.log(`[🔄 AdminPanel] Forzando carga de datos de apariencia desde la base de datos`);
+            try {
+              setTabLoading(true);
+              // Forzar recarga desde la base de datos para la sección 'appearance'
+              await loadConfigSection('appearance');
+            } finally {
+              if (isComponentMounted.current) {
+                setTabLoading(false);
+              }
+            }
+            return; // Salir después de forzar la carga
+          }
           break;
         case 'general':
         case 'users':
@@ -346,26 +354,39 @@ const AdminPanel: React.FC = () => {
       
       // Si hay cambios en la apariencia, guardar primero esa sección
       if (activeTab === 'appearance') {
-        const appearanceData = {
-          primary_color: editableConfig.theme?.primaryColor || '',
-          accent_color: editableConfig.theme?.accentColor || '',
-          text_color: editableConfig.theme?.textColor || '',
-          background_color: editableConfig.theme?.backgroundColor || '',
-          cart_button_color: editableConfig.theme?.cartButtonColor || '',
-          floating_cart_button_color: editableConfig.theme?.floatingCartButtonColor || ''
+        // Asegurar que todos los colores tengan valores, no espacios en blanco
+        const primaryColor = editableConfig.theme?.primaryColor?.trim() || '#003b29';
+        const accentColor = editableConfig.theme?.accentColor?.trim() || '#4caf50';
+        const textColor = editableConfig.theme?.textColor?.trim() || '#333333';
+        const backgroundColor = editableConfig.theme?.backgroundColor?.trim() || '#ffffff';
+        const cartButtonColor = editableConfig.theme?.cartButtonColor?.trim() || '#003b29';
+        const floatingCartButtonColor = editableConfig.theme?.floatingCartButtonColor?.trim() || '#003b29';
+        
+        // Crear objeto con los valores seguros
+        const themeData = {
+          primaryColor,
+          accentColor,
+          textColor,
+          backgroundColor,
+          cartButtonColor,
+          floatingCartButtonColor
         };
         
-        console.log('Guardando datos de apariencia:', appearanceData);
+        console.log('AdminPanel - Guardando datos de apariencia:', themeData);
         
         // Guardar solo la configuración de apariencia si estamos en esa pestaña
-        await saveAppearanceOnly({
-          primaryColor: editableConfig.theme?.primaryColor || '',
-          accentColor: editableConfig.theme?.accentColor || '',
-          textColor: editableConfig.theme?.textColor || '',
-          backgroundColor: editableConfig.theme?.backgroundColor || '',
-          cartButtonColor: editableConfig.theme?.cartButtonColor || '',
-          floatingCartButtonColor: editableConfig.theme?.floatingCartButtonColor || ''
-        });
+        const saveResult = await saveAppearanceOnly(themeData);
+        
+        if (saveResult) {
+          console.log('AdminPanel - Datos de apariencia guardados exitosamente');
+        } else {
+          console.error('AdminPanel - Error al guardar datos de apariencia');
+          alert('Ha ocurrido un error al guardar los colores. Por favor, intenta de nuevo.');
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log('AdminPanel - Resultado del guardado de apariencia:', saveResult);
       } else if (activeTab === 'general') {
         // Guardar solo la configuración del sitio si estamos en esa pestaña
         await saveSiteConfigOnly({
@@ -373,8 +394,7 @@ const AdminPanel: React.FC = () => {
           whatsappNumber: editableConfig.whatsappNumber || '',
           currency: editableConfig.currency || '',
           openingHours: editableConfig.openingHours || '',
-          footerText: editableConfig.footerText || '',
-          cashDenominations: editableConfig.cashDenominations || []
+          footerText: editableConfig.footerText || ''
         });
       } else if (activeTab === 'menu' || activeTab === 'categories') {
         // Guardar solo el menú si estamos en esas pestañas
@@ -812,7 +832,30 @@ const AdminPanel: React.FC = () => {
                 {activeTab === 'appearance' && userRole === 'admin' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-lg shadow-sm p-6">
-                      <h2 className="text-xl font-semibold mb-6 pb-2 border-b">Colores y Apariencia</h2>
+                      <div className="flex justify-between items-center mb-6 pb-2 border-b">
+                        <h2 className="text-xl font-semibold">Colores y Apariencia</h2>
+                        <button 
+                          onClick={async () => {
+                            try {
+                              setTabLoading(true);
+                              await loadConfigSection('appearance');
+                              alert('Colores actualizados desde la base de datos');
+                            } catch (error) {
+                              console.error('Error al recargar colores:', error);
+                              alert('Error al cargar colores');
+                            } finally {
+                              setTabLoading(false);
+                            }
+                          }}
+                          className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded flex items-center"
+                          disabled={tabLoading || configLoading}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                          </svg>
+                          {tabLoading ? 'Cargando...' : 'Actualizar colores'}
+                        </button>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <ModernColorPicker
                           label="Color Primario"

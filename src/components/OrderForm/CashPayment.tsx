@@ -12,10 +12,11 @@ export const CashPayment: React.FC<CashPaymentProps> = ({
 }) => {
   const { config } = useConfig();
   
-  // Asegurar que cashDenominations siempre sea un array válido
-  const cashDenominations = Array.isArray(config.cashDenominations) && config.cashDenominations.length > 0
-    ? config.cashDenominations
-    : [{ value: 100, label: '100' }, { value: 200, label: '200' }, { value: 500, label: '500' }];
+  // Valores fijos para las denominaciones
+  const denominationsValues = [100, 200, 500, 1000, 2000];
+  
+  // Obtener el símbolo de moneda desde la configuración
+  const currencySymbol = config.currency || 'RD$';
   
   return (
     <div>
@@ -25,9 +26,9 @@ export const CashPayment: React.FC<CashPaymentProps> = ({
         onChange={(e) => setCashAmount(Number(e.target.value))}
         className="w-full p-2 border border-gray-300 rounded"
       >
-        {cashDenominations.map((denom) => (
-          <option key={denom.value} value={denom.value}>
-            {denom.label}
+        {denominationsValues.map((value) => (
+          <option key={value} value={value}>
+            {currencySymbol}{value}
           </option>
         ))}
       </select>

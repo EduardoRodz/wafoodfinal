@@ -216,30 +216,47 @@ export const getAppearanceConfig = async (): Promise<AppearanceConfig> => {
     
     if (data && data.length > 0) {
       console.log('Configuración de apariencia cargada desde Supabase:', data[0]);
-      return data[0] as AppearanceConfig;
+      
+      // Asegurar que todos los campos tengan valores
+      const safeConfig: AppearanceConfig = {
+        primary_color: data[0].primary_color || '#003b29',
+        accent_color: data[0].accent_color || '#4caf50',
+        text_color: data[0].text_color || '#333333',
+        background_color: data[0].background_color || '#ffffff',
+        cart_button_color: data[0].cart_button_color || '#003b29',
+        floating_cart_button_color: data[0].floating_cart_button_color || '#003b29',
+        id: data[0].id,
+        created_at: data[0].created_at,
+        updated_at: data[0].updated_at
+      };
+      
+      // Imprimir datos procesados para depuración
+      console.log('Datos de apariencia procesados:', safeConfig);
+      
+      return safeConfig;
     }
 
-    // Si no hay datos, devolver un objeto vacío sin valores predeterminados
+    // Si no hay datos, devolver un objeto con valores predeterminados
     console.log('No se encontró configuración de apariencia en la base de datos');
     return {
-      primary_color: '',
-      accent_color: '',
-      text_color: '',
-      background_color: '',
-      cart_button_color: '',
-      floating_cart_button_color: ''
+      primary_color: '#003b29',
+      accent_color: '#4caf50',
+      text_color: '#333333',
+      background_color: '#ffffff',
+      cart_button_color: '#003b29',
+      floating_cart_button_color: '#003b29'
     };
   } catch (error) {
     console.error('Error al cargar configuración de apariencia:', error);
     
-    // En caso de error, devolver un objeto vacío sin valores predeterminados
+    // En caso de error, devolver un objeto con valores predeterminados
     return {
-      primary_color: '',
-      accent_color: '',
-      text_color: '',
-      background_color: '',
-      cart_button_color: '',
-      floating_cart_button_color: ''
+      primary_color: '#003b29',
+      accent_color: '#4caf50',
+      text_color: '#333333',
+      background_color: '#ffffff',
+      cart_button_color: '#003b29',
+      floating_cart_button_color: '#003b29'
     };
   }
 };
@@ -247,7 +264,19 @@ export const getAppearanceConfig = async (): Promise<AppearanceConfig> => {
 // Función para guardar la configuración de apariencia
 export const saveAppearanceConfig = async (config: AppearanceConfig): Promise<boolean> => {
   try {
-    console.log('Guardando configuración de apariencia:', config);
+    console.log('Guardando configuración de apariencia (original):', config);
+    
+    // Asegurar que todos los campos tienen valores por defecto si vienen vacíos o nulos
+    const safeConfig = {
+      primary_color: config.primary_color?.trim() ? config.primary_color.trim() : '#003b29',
+      accent_color: config.accent_color?.trim() ? config.accent_color.trim() : '#4caf50',
+      text_color: config.text_color?.trim() ? config.text_color.trim() : '#333333',
+      background_color: config.background_color?.trim() ? config.background_color.trim() : '#ffffff',
+      cart_button_color: config.cart_button_color?.trim() ? config.cart_button_color.trim() : '#003b29',
+      floating_cart_button_color: config.floating_cart_button_color?.trim() ? config.floating_cart_button_color.trim() : '#003b29'
+    };
+    
+    console.log('Configuración de apariencia con valores seguros:', safeConfig);
     
     // Primero verificamos si ya existe algún registro
     const supabaseAdmin = await getSupabaseAdmin();
@@ -268,34 +297,46 @@ export const saveAppearanceConfig = async (config: AppearanceConfig): Promise<bo
     if (existingData && existingData.length > 0) {
       console.log(`Actualizando configuración de apariencia existente con ID: ${existingData[0].id}`);
       
-      // Preservar valores existentes y solo actualizar los proporcionados
+      // Creamos el objeto actualizado con los valores proporcionados
       const updatedConfig = {
         ...existingData[0],
-        // Solo actualizar campos que no sean vacíos o undefined
-        primary_color: config.primary_color || existingData[0].primary_color,
-        accent_color: config.accent_color || existingData[0].accent_color,
-        text_color: config.text_color || existingData[0].text_color,
-        background_color: config.background_color || existingData[0].background_color,
-        cart_button_color: config.cart_button_color || existingData[0].cart_button_color,
-        floating_cart_button_color: config.floating_cart_button_color || existingData[0].floating_cart_button_color,
+        ...safeConfig,
         updated_at: new Date().toISOString()
       };
       
-      console.log('Configuración de apariencia actualizada con preservación de datos:', updatedConfig);
+      console.log('Configuración de apariencia a actualizar:', updatedConfig);
       
       const { data, error } = await supabaseAdmin
         .from('appearance_config')
         .update(updatedConfig)
-        .eq('id', existingData[0].id)
-        .select();
+        .eq('id', existingData[0].id);
       
-      result = { data, error };
+      if (error) {
+        console.error('Error al actualizar configuración de apariencia:', error);
+        return false;
+      }
+      
+      console.log('Actualización ejecutada');
+      // Verificar que se actualizó correctamente
+      const { data: verifyData, error: verifyError } = await supabaseAdmin
+        .from('appearance_config')
+        .select('*')
+        .eq('id', existingData[0].id)
+        .single();
+        
+      if (verifyError) {
+        console.error('Error al verificar actualización:', verifyError);
+      } else {
+        console.log('Configuración verificada después de actualizar:', verifyData);
+      }
+      
+      result = { data: verifyData, error };
     } else {
       // Si no existe ningún registro, lo insertamos
       console.log('No hay configuración de apariencia previa, creando nueva');
       const { data, error } = await supabaseAdmin
         .from('appearance_config')
-        .insert(config)
+        .insert(safeConfig)
         .select();
       
       result = { data, error };
@@ -307,6 +348,13 @@ export const saveAppearanceConfig = async (config: AppearanceConfig): Promise<bo
     }
     
     console.log('Configuración de apariencia guardada correctamente, respuesta:', result.data);
+    
+    // Invalidar caché para forzar recarga en próximas solicitudes
+    const event = new CustomEvent('appearanceConfigSaved', { 
+      detail: safeConfig 
+    });
+    window.dispatchEvent(event);
+    
     return true;
   } catch (error) {
     console.error('Error al guardar configuración de apariencia:', error);
@@ -780,6 +828,20 @@ export const getConfig = async () => {
       getMenuData()
     ]);
     
+    console.log('Datos de apariencia obtenidos:', appearanceConfig);
+    
+    // Asegurar que los colores tengan valores predeterminados si vienen nulos o vacíos
+    const safeAppearance = {
+      primaryColor: appearanceConfig.primary_color?.trim() || '#003b29',
+      accentColor: appearanceConfig.accent_color?.trim() || '#4caf50',
+      textColor: appearanceConfig.text_color?.trim() || '#333333',
+      backgroundColor: appearanceConfig.background_color?.trim() || '#ffffff',
+      cartButtonColor: appearanceConfig.cart_button_color?.trim() || '#003b29',
+      floatingCartButtonColor: appearanceConfig.floating_cart_button_color?.trim() || '#003b29'
+    };
+    
+    console.log('Colores procesados para el tema:', safeAppearance);
+    
     // Combinar en un solo objeto de configuración, sin aplicar valores por defecto
     const config = {
       restaurantName: siteConfig.restaurant_name || '',
@@ -787,14 +849,7 @@ export const getConfig = async () => {
       currency: siteConfig.currency || '',
       openingHours: siteConfig.opening_hours || '',
       footerText: siteConfig.footer_text || '',
-      theme: {
-        primaryColor: appearanceConfig.primary_color || '',
-        accentColor: appearanceConfig.accent_color || '',
-        textColor: appearanceConfig.text_color || '',
-        backgroundColor: appearanceConfig.background_color || '',
-        cartButtonColor: appearanceConfig.cart_button_color || '',
-        floatingCartButtonColor: appearanceConfig.floating_cart_button_color || ''
-      },
+      theme: safeAppearance,
       categories: menu || [],
       installationStatus: siteConfig.installation_status
     };
@@ -812,12 +867,12 @@ export const getConfig = async () => {
       openingHours: '',
       footerText: '',
       theme: {
-        primaryColor: '',
-        accentColor: '',
-        textColor: '',
-        backgroundColor: '',
-        cartButtonColor: '',
-        floatingCartButtonColor: ''
+        primaryColor: '#003b29',
+        accentColor: '#4caf50',
+        textColor: '#333333',
+        backgroundColor: '#ffffff',
+        cartButtonColor: '#003b29',
+        floatingCartButtonColor: '#003b29'
       },
       categories: [],
       installationStatus: 'pending'
