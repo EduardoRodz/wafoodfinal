@@ -52,7 +52,7 @@ async function setAdminRole() {
       .from('user_roles')
       .select('*')
       .eq('user_id', targetUser.id)
-      .single();
+      .maybeSingle();
     
     if (checkError) {
       console.log('Error en la consulta:', checkError);

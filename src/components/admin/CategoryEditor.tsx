@@ -1,313 +1,491 @@
 import React, { useState } from 'react';
-import { ArrowUp, ArrowDown, Edit, Trash, Plus, Check, X } from 'lucide-react';
+import { ArrowUp, ArrowDown, Edit, Trash, Plus, Check, X, ChevronUp, ChevronDown, Edit2, AlertTriangle, GripVertical } from 'lucide-react';
+import { deleteCategory } from '../../services/configService';
+import { useToast } from '../../hooks/use-toast';
+import { v4 as uuidv4 } from 'uuid';
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  TouchSensor,
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
+// Emoji comunes para uso como iconos
+const commonEmojiOptions = ['🍽️', '🍛', '🍔', '🍕', '🍝', '🥗', '🍣', '🍰', '🥪', '🍱', '🍗', '🍹', '☕', '🥤'];
+
+// Tipo de datos para una categoría
 interface Category {
   id: string;
   name: string;
   icon: string;
-  items: any[];
+  items: {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    image: string;
+  }[];
 }
 
+// Props para el componente
 interface CategoryEditorProps {
   categories: Category[];
   onChange: (categories: Category[]) => void;
   onMove: (index: number, direction: 'up' | 'down') => void;
 }
 
-const CategoryEditor: React.FC<CategoryEditorProps> = ({ categories, onChange, onMove }) => {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [newCategory, setNewCategory] = useState<Category>({
-    id: '',
-    name: '',
-    icon: '🍽️',
-    items: []
-  });
-  const [showAddForm, setShowAddForm] = useState(false);
+// Componente de formulario de categoría
+interface CategoryFormProps {
+  initialData?: Category;
+  onSave: (category: Category) => void;
+  onCancel: () => void;
+}
 
-  // Validar el ID para asegurar que sea único
-  const validateId = (id: string, skipIndex?: number): boolean => {
-    return !categories.some((cat, idx) => 
-      idx !== skipIndex && cat.id.toLowerCase() === id.toLowerCase());
-  };
-
-  // Generar un ID basado en el nombre
-  const generateIdFromName = (name: string): string => {
-    const baseId = name
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-    
-    // Si el ID ya existe, añadir un número
-    let newId = baseId;
-    let counter = 1;
-    
-    while (!validateId(newId)) {
-      newId = `${baseId}-${counter}`;
-      counter++;
-    }
-
-    return newId;
-  };
-
-  const handleEdit = (index: number) => {
-    setEditingIndex(index);
-    setNewCategory({ ...categories[index] });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingIndex(null);
-    setShowAddForm(false);
-    setNewCategory({
+// Componente para el formulario de creación/edición de categorías
+const CategoryForm: React.FC<CategoryFormProps> = ({ initialData, onSave, onCancel }) => {
+  const [category, setCategory] = useState<Category>(
+    initialData || {
       id: '',
       name: '',
       icon: '🍽️',
       items: []
-    });
-  };
+    }
+  );
 
-  const handleSaveEdit = () => {
-    if (!newCategory.name.trim()) {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!category.name.trim()) {
       alert('El nombre de la categoría es obligatorio');
       return;
     }
-
-    // Si se está editando, actualizar la categoría existente
-    if (editingIndex !== null) {
-      // Si el ID ha cambiado, validar que sea único
-      if (newCategory.id !== categories[editingIndex].id && !validateId(newCategory.id, editingIndex)) {
-        alert('El ID debe ser único');
-        return;
-      }
-
-      const updatedCategories = [...categories];
-      updatedCategories[editingIndex] = { ...newCategory };
-      onChange(updatedCategories);
-    } 
-    // Si se está añadiendo, crear una nueva categoría
-    else if (showAddForm) {
-      // Generar un ID si no se ha proporcionado
-      const categoryToAdd = { 
-        ...newCategory,
-        id: newCategory.id.trim() || generateIdFromName(newCategory.name)
-      };
-
-      if (!validateId(categoryToAdd.id)) {
-        alert('El ID debe ser único');
-        return;
-      }
-
-      onChange([...categories, categoryToAdd]);
-    }
-
-    handleCancelEdit();
-  };
-
-  const handleDelete = (index: number) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar la categoría "${categories[index].name}"?`)) {
-      const updatedCategories = [...categories];
-      updatedCategories.splice(index, 1);
-      onChange(updatedCategories);
+    
+    // Si es una nueva categoría, generar ID si no se ha especificado
+    if (!initialData && !category.id) {
+      const id = category.name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/--+/g, '-')
+        .trim();
+      
+      onSave({
+        ...category,
+        id: id || uuidv4().substring(0, 8)
+      });
+    } else {
+      onSave(category);
     }
   };
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    setNewCategory({
-      ...newCategory,
-      name,
-      // Solo actualizar el ID automáticamente si estamos añadiendo y el usuario no ha introducido un ID
-      id: showAddForm && !newCategory.id ? generateIdFromName(name) : newCategory.id
+  return (
+    <form onSubmit={handleSubmit} className="p-4">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Nombre *</label>
+          <input
+            type="text"
+            value={category.name}
+            onChange={(e) => setCategory({ ...category, name: e.target.value })}
+            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Ej: Platos Principales"
+            required
+          />
+        </div>
+        
+        {!initialData && (
+          <div>
+            <label className="block text-sm font-medium mb-1">ID (opcional)</label>
+            <input
+              type="text"
+              value={category.id}
+              onChange={(e) => setCategory({ ...category, id: e.target.value })}
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Se generará automáticamente"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Identificador único para la categoría. Se generará automáticamente si lo dejas en blanco.
+            </p>
+          </div>
+        )}
+        
+        <div>
+          <label className="block text-sm font-medium mb-1">Icono</label>
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {commonEmojiOptions.map(emoji => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => setCategory({ ...category, icon: emoji })}
+                className={`h-10 flex items-center justify-center text-lg rounded hover:bg-gray-100 ${
+                  category.icon === emoji ? 'bg-blue-100 border border-blue-300' : 'bg-white border border-gray-300'
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={category.icon}
+            onChange={(e) => setCategory({ ...category, icon: e.target.value })}
+            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="O ingresa un emoji personalizado"
+            maxLength={2}
+          />
+        </div>
+      </div>
+      
+      <div className="flex justify-end gap-2 mt-6">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 rounded shadow-sm hover:bg-gray-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-green-600 text-white rounded shadow-sm hover:bg-green-700"
+        >
+          Guardar
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// Optimizar renderizado de lista de items con soporte para drag and drop
+const SortableCategoryListItem: React.FC<{
+  category: Category;
+  index: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onEdit: (category: Category) => void;
+  onDelete: (id: string) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
+}> = React.memo(({ category, index, isFirst, isLast, onEdit, onDelete, onMove }) => {
+  // Configurar comportamiento arrastrable
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: category.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 1,
+    position: 'relative' as const
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="bg-white border rounded-lg shadow-sm mb-3 overflow-hidden"
+    >
+      <div className="flex justify-between items-center p-3 sm:p-4">
+        <div className="flex items-center">
+          <button
+            className="flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-gray-400 mr-1 touch-manipulation"
+            {...attributes}
+            {...listeners}
+            aria-label="Arrastrar para reordenar"
+          >
+            <GripVertical size={20} />
+          </button>
+          <span className="flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg mr-3">
+            {category.icon}
+          </span>
+          <div>
+            <h3 className="font-medium">{category.name}</h3>
+            <p className="text-xs text-gray-500">{category.items.length} platos</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-1">
+          <button 
+            onClick={() => onMove(index, 'up')}
+            disabled={isFirst}
+            className={`p-2 rounded-full ${isFirst ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100 text-gray-500'}`}
+            aria-label="Mover arriba"
+          >
+            <ChevronUp size={18} />
+          </button>
+          <button 
+            onClick={() => onMove(index, 'down')}
+            disabled={isLast}
+            className={`p-2 rounded-full ${isLast ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100 text-gray-500'}`}
+            aria-label="Mover abajo"
+          >
+            <ChevronDown size={18} />
+          </button>
+          <button 
+            onClick={() => onEdit(category)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+            aria-label="Editar categoría"
+          >
+            <Edit2 size={18} />
+          </button>
+          <button 
+            onClick={() => onDelete(category.id)}
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-500"
+            aria-label="Eliminar categoría"
+          >
+            <Trash size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+SortableCategoryListItem.displayName = 'SortableCategoryListItem';
+
+// Componente principal
+const CategoryEditor: React.FC<CategoryEditorProps> = ({ categories, onChange, onMove }) => {
+  const { toast } = useToast();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Configurar sensores para DnD
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Distancia mínima para iniciar el arrastre
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250, // Delay para activar en dispositivos táctiles
+        tolerance: 5, // Tolerancia de movimiento
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Manejar el fin del arrastre
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = categories.findIndex(category => category.id === active.id);
+      const newIndex = categories.findIndex(category => category.id === over.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Reordenar categorías
+        const updatedCategories = arrayMove([...categories], oldIndex, newIndex);
+        onChange(updatedCategories);
+      }
+    }
+  };
+
+  // Función para abrir el modal de edición
+  const openEditModal = (category?: Category) => {
+    if (category) {
+      setEditingCategory(category);
+    } else {
+      setEditingCategory(null); // Nueva categoría
+    }
+    setIsModalOpen(true);
+  };
+
+  // Función para cerrar el modal
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingCategory(null);
+  };
+
+  // Función para guardar los cambios
+  const handleSave = (category: Category) => {
+    let updatedCategories;
+    
+    if (editingCategory) {
+      // Editar categoría existente
+      updatedCategories = categories.map(cat => 
+        cat.id === category.id ? category : cat
+      );
+    } else {
+      // Añadir nueva categoría
+      updatedCategories = [...categories, category];
+    }
+    
+    onChange(updatedCategories);
+    closeModal();
+    
+    toast({
+      title: editingCategory ? "Categoría actualizada" : "Categoría creada",
+      description: `La categoría "${category.name}" ha sido ${editingCategory ? 'actualizada' : 'creada'} exitosamente.`,
+      variant: "success",
     });
   };
 
-  const commonEmojiOptions = ['🍽️', '🍕', '🍔', '🍣', '🥗', '🍰', '🍷', '🍹', '🍪', '🥤', '🍺', '🍱', '🥘', '🍲', '🥪'];
+  // Abrir diálogo de confirmación para eliminar
+  const confirmDelete = (id: string) => {
+    setDeleteId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  // Eliminar categoría
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    
+    try {
+      // Intentar eliminar del servidor
+      await deleteCategory(deleteId);
+      
+      // Actualizar estado local
+      const updatedCategories = categories.filter(cat => cat.id !== deleteId);
+      onChange(updatedCategories);
+      
+      toast({
+        title: "Categoría eliminada",
+        description: "La categoría ha sido eliminada exitosamente.",
+        variant: "success",
+      });
+    } catch (error) {
+      console.error('Error al eliminar categoría:', error);
+      toast({
+        title: "Error al eliminar",
+        description: "No se pudo eliminar la categoría. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteConfirmOpen(false);
+      setDeleteId(null);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-semibold">Categorías del Menú</h2>
-        
-        {!showAddForm && editingIndex === null && (
-          <button
-            onClick={() => {
-              setShowAddForm(true);
-              setEditingIndex(null);
-            }}
-            className="flex items-center gap-1 text-sm py-1 px-3 bg-gray-100 hover:bg-gray-200 rounded"
-          >
-            <Plus size={16} /> Agregar Categoría
-          </button>
-        )}
+        <button
+          onClick={() => openEditModal()}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-1"
+        >
+          <Plus size={16} /> 
+          <span className="hidden sm:inline">Añadir Categoría</span>
+          <span className="sm:hidden">Añadir</span>
+        </button>
       </div>
 
-      {/* Formulario para añadir/editar */}
-      {(showAddForm || editingIndex !== null) && (
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <h3 className="font-medium mb-3">
-            {editingIndex !== null ? 'Editar Categoría' : 'Añadir Nueva Categoría'}
-          </h3>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm mb-1">Nombre</label>
-              <input
-                type="text"
-                value={newCategory.name}
-                onChange={handleNameChange}
-                className="w-full p-2 border border-gray-300 rounded"
-                placeholder="Ej: Platos Principales"
-              />
+      {/* Instrucciones */}
+      <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+        <p>Puedes reordenar las categorías usando los botones de flechas o arrastrando con el icono de agarre. Este orden se mostrará a los clientes.</p>
+      </div>
+      
+      {/* Lista de categorías con drag and drop */}
+      {categories.length === 0 ? (
+        <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+          <p className="text-gray-500 mb-2">No hay categorías disponibles</p>
+          <button 
+            onClick={() => openEditModal()} 
+            className="text-blue-500 hover:underline"
+          >
+            Añadir tu primera categoría
+          </button>
+        </div>
+      ) : (
+        <DndContext 
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext 
+            items={categories.map(category => category.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-2">
+              {categories.map((category, index) => (
+                <SortableCategoryListItem
+                  key={category.id}
+                  category={category}
+                  index={index}
+                  isFirst={index === 0}
+                  isLast={index === categories.length - 1}
+                  onEdit={openEditModal}
+                  onDelete={confirmDelete}
+                  onMove={onMove}
+                />
+              ))}
             </div>
-            
-            <div>
-              <label className="block text-sm mb-1">ID (slug)</label>
-              <input
-                type="text"
-                value={newCategory.id}
-                onChange={(e) => setNewCategory({ ...newCategory, id: e.target.value })}
-                className="w-full p-2 border border-gray-300 rounded"
-                placeholder="Ej: platos-principales"
-                disabled={editingIndex !== null} // No permitir cambiar el ID al editar
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                El ID se usa en URLs y debe ser único. Se generará automáticamente si lo dejas en blanco.
-              </p>
-            </div>
-            
-            <div>
-              <label className="block text-sm mb-1">Icono</label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {commonEmojiOptions.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setNewCategory({ ...newCategory, icon: emoji })}
-                    className={`w-8 h-8 flex items-center justify-center text-lg rounded hover:bg-gray-200 ${
-                      newCategory.icon === emoji ? 'bg-blue-100 border border-blue-400' : 'bg-white border border-gray-300'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={newCategory.icon}
-                onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
-                className="w-full p-2 border border-gray-300 rounded"
-                placeholder="Emoji o texto"
-                maxLength={2}
-              />
-            </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="py-1 px-3 border border-gray-300 rounded hover:bg-gray-100"
+      {/* Modal para crear/editar categoría */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-4 py-3 border-b flex justify-between items-center">
+              <h3 className="font-medium">
+                {editingCategory ? 'Editar Categoría' : 'Añadir Nueva Categoría'}
+              </h3>
+              <button 
+                onClick={closeModal}
+                className="text-gray-500 hover:bg-gray-100 p-1 rounded-full"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveEdit}
-                className="py-1 px-3 bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                Guardar
+                <X size={20} />
               </button>
             </div>
+            
+            <CategoryForm
+              initialData={editingCategory || undefined}
+              onSave={handleSave}
+              onCancel={closeModal}
+            />
           </div>
         </div>
       )}
 
-      {/* Lista de categorías */}
-      {categories.length > 0 ? (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Icono
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Platos
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {categories.map((category, index) => (
-                <tr key={category.id} className={editingIndex === index ? 'bg-blue-50' : ''}>
-                  <td className="px-6 py-4 whitespace-nowrap text-2xl">
-                    {category.icon}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {category.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <code className="bg-gray-100 px-2 py-1 rounded text-sm">
-                      {category.id}
-                    </code>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {category.items.length} platos
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => onMove(index, 'up')}
-                        disabled={index === 0}
-                        className={`p-1 rounded hover:bg-gray-100 ${index === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title="Mover arriba"
-                      >
-                        <ArrowUp size={18} className="text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => onMove(index, 'down')}
-                        disabled={index === categories.length - 1}
-                        className={`p-1 rounded hover:bg-gray-100 ${index === categories.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title="Mover abajo"
-                      >
-                        <ArrowDown size={18} className="text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(index)}
-                        className="p-1 rounded hover:bg-gray-100"
-                        title="Editar"
-                      >
-                        <Edit size={18} className="text-blue-600" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(index)}
-                        className="p-1 rounded hover:bg-gray-100"
-                        title="Eliminar"
-                      >
-                        <Trash size={18} className="text-red-600" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-gray-500">No hay categorías definidas.</p>
-          <button 
-            onClick={() => setShowAddForm(true)}
-            className="mt-2 text-blue-600 hover:underline"
-          >
-            Añadir la primera categoría
-          </button>
+      {/* Modal de confirmación para eliminar */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+            <div className="text-center mb-6">
+              <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">Confirmar eliminación</h3>
+              <p className="text-gray-500">
+                ¿Estás seguro de eliminar esta categoría? Esta acción eliminará también todos los platos asociados y no se puede deshacer.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

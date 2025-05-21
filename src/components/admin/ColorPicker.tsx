@@ -9,6 +9,37 @@ interface ColorPickerProps {
 const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [localColor, setLocalColor] = useState(value);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Actualizar localColor cuando value cambia desde props
+  useEffect(() => {
+    setLocalColor(value);
+  }, [value]);
+  
+  // Función para manejar cambios con debounce
+  const handleColorChange = (newColor: string) => {
+    setLocalColor(newColor);
+    
+    // Limpiar el timer anterior si existe
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    
+    // Crear un nuevo timer para aplicar el cambio después de 500ms
+    timerRef.current = setTimeout(() => {
+      onChange(newColor);
+    }, 500);
+  };
+  
+  // Limpiar timer al desmontar
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
   
   // Convertir hex a RGB
   const hexToRgb = (hex: string) => {
@@ -55,15 +86,15 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange }) => 
         <button
           type="button"
           className="w-10 h-10 rounded border border-gray-300 mr-2 cursor-pointer"
-          style={{ backgroundColor: value }}
+          style={{ backgroundColor: localColor }}
           onClick={() => setIsOpen(!isOpen)}
           aria-label={`Elegir ${label}`}
         />
         
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={localColor}
+          onChange={(e) => handleColorChange(e.target.value)}
           className="flex-1 p-2 border border-gray-300 rounded"
         />
       </div>
@@ -77,7 +108,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange }) => 
                 className="w-8 h-8 rounded-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 style={{ backgroundColor: color }}
                 onClick={() => {
-                  onChange(color);
+                  handleColorChange(color);
                   setIsOpen(false);
                 }}
                 aria-label={`Color ${color}`}
@@ -88,18 +119,18 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange }) => 
           <div className="mt-2">
             <input
               type="color"
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
+              value={localColor}
+              onChange={(e) => handleColorChange(e.target.value)}
               className="w-full h-8"
             />
           </div>
           
-          <div className="mt-2 flex">
+          <div className="mt-2 flex justify-end">
             <button
               className="text-sm py-1 px-2 rounded text-white"
               style={{ 
-                backgroundColor: value,
-                color: isDarkColor(value) ? '#ffffff' : '#000000'
+                backgroundColor: localColor,
+                color: isDarkColor(localColor) ? '#ffffff' : '#000000'
               }}
               onClick={() => setIsOpen(false)}
             >

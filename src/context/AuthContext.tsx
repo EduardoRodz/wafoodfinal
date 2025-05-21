@@ -21,6 +21,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Verificar si el usuario está autenticado al cargar la aplicación
   useEffect(() => {
     const checkUser = async () => {
+      // No verificar usuario en la página del instalador
+      if (window.location.pathname === '/instalador') {
+        console.log('En la página del instalador, no se verificará el usuario');
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       try {
         const { user } = await getCurrentUser();

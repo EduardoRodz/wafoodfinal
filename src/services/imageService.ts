@@ -1,4 +1,4 @@
-import supabase from '../lib/supabase';
+import supabase, { supabaseAdmin } from '../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
 // Nombre del bucket para almacenar imágenes
@@ -19,7 +19,7 @@ export const initializeImageStorage = async () => {
     
     // Si el bucket no existe, crearlo
     if (!buckets?.find(b => b.name === BUCKET_NAME)) {
-      const { error: createError } = await supabase
+      const { error: createError } = await supabaseAdmin
         .storage
         .createBucket(BUCKET_NAME, {
           public: true, // Hacer públicas las imágenes para que sean accesibles
@@ -59,13 +59,34 @@ export const uploadImage = async (file: File) => {
       throw new Error('La imagen no puede ser mayor a 5MB');
     }
     
+    // Extraer extensión del archivo o usar jpg por defecto para imágenes base64
+    let fileExt = file.name.split('.').pop();
+    if (!fileExt || fileExt === 'blob' || fileExt.length > 5) {
+      // Si no tiene extensión o es un blob, determinar el tipo basado en el tipo MIME
+      const mimeTypes: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+        'image/svg+xml': 'svg'
+      };
+      fileExt = mimeTypes[file.type] || 'jpg';
+    }
+    
     // Generar un nombre único para el archivo
-    const fileExt = file.name.split('.').pop();
     const fileName = `${uuidv4()}.${fileExt}`;
     const filePath = `${fileName}`;
     
-    // Subir archivo a Supabase Storage
-    const { data, error } = await supabase
+    console.log('Subiendo archivo recortado:', {
+      nombre: file.name,
+      tipo: file.type,
+      tamaño: `${(file.size / 1024).toFixed(2)} KB`,
+      extensiónDetectada: fileExt
+    });
+    
+    // Subir archivo a Supabase Storage usando supabaseAdmin para tener permisos suficientes
+    const { data, error } = await supabaseAdmin
       .storage
       .from(BUCKET_NAME)
       .upload(filePath, file, {
@@ -79,7 +100,7 @@ export const uploadImage = async (file: File) => {
     }
     
     // Obtener la URL pública
-    const { data: urlData } = supabase
+    const { data: urlData } = supabaseAdmin
       .storage
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
@@ -97,7 +118,7 @@ export const uploadImage = async (file: File) => {
 // Función para eliminar una imagen
 export const deleteImage = async (path: string) => {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .storage
       .from(BUCKET_NAME)
       .remove([path]);

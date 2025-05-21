@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
+import { useConfig } from '../context/ConfigContext';
 import { ShoppingCart, Pencil, Trash2, Plus, Minus } from 'lucide-react';
-import { formatCurrency } from '../utils/formatCurrency';
+import { useFormatCurrency } from '../utils/formatCurrency';
 import { Button } from './ui/button';
 import { useToast } from '../hooks/use-toast';
 import OrderForm from './OrderForm';
 import { SheetClose } from './ui/sheet';
-import { defaultConfig } from '../config';
 
 const Cart: React.FC = () => {
+  const { config } = useConfig();
+  const formatCurrency = useFormatCurrency();
   const { items, totalAmount, clearCart, addToCart, removeFromCart, removeItemCompletely } = useCart();
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editedNote, setEditedNote] = useState<string>('');
@@ -169,7 +171,7 @@ const Cart: React.FC = () => {
       <Button 
         className="w-full text-white font-medium py-6 flex items-center justify-center gap-2 rounded-lg shadow-md hover:shadow-lg transition-all"
         onClick={handleContinueOrder}
-        style={{ backgroundColor: defaultConfig.theme.cartButtonColor }}
+        style={{ backgroundColor: config.theme.cartButtonColor }}
       >
         <ShoppingCart size={20} /> Continuar con el pedido
       </Button>

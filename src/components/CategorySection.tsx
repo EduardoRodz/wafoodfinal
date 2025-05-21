@@ -20,7 +20,9 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category }) => {
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {category.items.map((item) => (
-          <OrderItem key={item.id} item={item} />
+          <div key={item.id} className="px-4 sm:px-0">
+            <OrderItem item={item} />
+          </div>
         ))}
       </div>
     </section>

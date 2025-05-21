@@ -1,19 +1,20 @@
-
 import { useState } from 'react';
 import { useCart } from '../../context/CartContext';
-import { defaultConfig } from '../../config';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { useFormatCurrency } from '../../utils/formatCurrency';
 import { useToast } from '@/hooks/use-toast';
+import { useConfig } from '../../context/ConfigContext';
 
 export const useOrderForm = () => {
   const { items, totalAmount } = useCart();
+  const { config } = useConfig();
+  const formatCurrency = useFormatCurrency();
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [orderType, setOrderType] = useState('delivery'); // Changed default to delivery
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash'); // cash or transfer
-  const [cashAmount, setCashAmount] = useState(defaultConfig.cashDenominations[0].value);
+  const [cashAmount, setCashAmount] = useState(config.cashDenominations[0].value);
   const [comments, setComments] = useState('');
   const [formErrors, setFormErrors] = useState({
     name: false,
@@ -79,7 +80,7 @@ export const useOrderForm = () => {
     items.forEach(item => {
       message += `• ${item.quantity}x ${item.name} - ${formatCurrency(item.price * item.quantity)}\n`;
       if (item.note) {
-        message += `   _Nota: ${item.note}_\n`;
+        message += `   Nota: ${item.note}\n`;
       }
     });
     
@@ -87,7 +88,7 @@ export const useOrderForm = () => {
     message += '¡Gracias por tu pedido! Lo estaremos preparando pronto.';
     
     // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${defaultConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${config.whatsappNumber}?text=${encodeURIComponent(message)}`;
     
     // Open WhatsApp in a new tab
     window.open(whatsappUrl, '_blank');

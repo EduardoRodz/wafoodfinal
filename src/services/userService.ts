@@ -35,20 +35,20 @@ export const getUsers = async (): Promise<User[]> => {
       return [];
     }
     
-    // Consultamos la tabla personalizada de roles de usuario
-    const { data: roleData, error: roleError } = await supabase
-      .from('user_roles')
-      .select('*');
+    // Consultamos la tabla profiles para obtener los roles
+    const { data: profilesData, error: profilesError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role');
     
-    if (roleError) {
-      console.error('Error al obtener roles de usuario:', roleError);
+    if (profilesError) {
+      console.error('Error al obtener roles de usuarios desde profiles:', profilesError);
     }
     
     // Creamos un mapa de ID de usuario a rol
     const userRoles: Record<string, string> = {};
-    if (roleData) {
-      roleData.forEach((record: any) => {
-        userRoles[record.user_id] = record.role;
+    if (profilesData) {
+      profilesData.forEach((record: any) => {
+        userRoles[record.id] = record.role;
       });
     }
     
@@ -180,7 +180,7 @@ export const updateUser = async (userData: UpdateUserData): Promise<{ success: b
         .from('user_roles')
         .select('*')
         .eq('user_id', userData.id)
-        .single();
+        .maybeSingle();
       
       if (checkError && checkError.code !== 'PGRST116') { // PGRST116 es "no se encontró registro"
         console.error('Error al verificar rol existente:', checkError);
@@ -269,7 +269,34 @@ export const getCurrentUserRole = async (): Promise<string> => {
       return 'admin';
     }
     
-    // Consultar el rol del usuario en la base de datos
+    // Verificar si tiene el rol en los metadatos
+    if (user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin') {
+      console.log('Rol admin encontrado en metadatos del usuario');
+      return 'admin';
+    }
+    
+    // Método 1: Consultar el rol en la tabla profiles
+    console.log("Consultando rol en tabla profiles para:", user.id);
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (!profileError && profileData?.role === 'admin') {
+        console.log("Rol admin encontrado en profiles:", profileData.role);
+        return 'admin';
+      }
+      
+      if (profileError) {
+        console.log('No se encontró información en profiles o hubo error, verificando en user_roles');
+      }
+    } catch (profileQueryError) {
+      console.error('Error en consulta de profiles:', profileQueryError);
+    }
+    
+    // Método 2: Consultar el rol en la tabla user_roles
     console.log("Consultando rol en tabla user_roles para:", user.id);
     try {
       const { data: roleData, error: roleError } = await supabase
@@ -279,18 +306,19 @@ export const getCurrentUserRole = async (): Promise<string> => {
         .single();
       
       if (roleError) {
-        console.error('Error al obtener rol:', roleError);
-        // No lanzamos error para evitar que la app se rompa, usamos rol por defecto
-        return 'staff';
+        console.error('Error al obtener rol en user_roles:', roleError);
+        // No lanzamos error para evitar que la app se rompa, continuamos con verificaciones
+      } else if (roleData?.role === 'admin') {
+        console.log("Rol admin encontrado en user_roles:", roleData.role);
+        return 'admin';
       }
-      
-      const role = roleData?.role || 'staff';
-      console.log("Rol obtenido:", role);
-      return role;
     } catch (roleQueryError) {
-      console.error('Error en consulta de rol:', roleQueryError);
-      return 'staff';
+      console.error('Error en consulta de user_roles:', roleQueryError);
     }
+    
+    // Por defecto, si no se ha detectado rol admin en ninguna parte
+    console.log("No se detectó rol admin, asignando rol 'staff'");
+    return 'staff';
   } catch (error) {
     console.error('Error al obtener rol del usuario actual:', error);
     // Por defecto, asumimos rol de staff para no romper la aplicación

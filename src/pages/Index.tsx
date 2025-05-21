@@ -19,7 +19,7 @@ const Index = () => {
       <div className="flex flex-col min-h-screen">
         <Header />
         
-        <main className="flex-grow w-full px-4 sm:px-6 md:px-8 py-2 sm:py-6">
+        <main className="flex-grow w-full px-4 sm:px-6 md:px-8 pt-0 pb-2 sm:pb-6">
           <div className="max-w-7xl mx-auto w-full">
             <CategoryMenu />
             

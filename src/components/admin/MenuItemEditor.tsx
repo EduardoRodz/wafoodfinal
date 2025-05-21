@@ -1,6 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { Edit, Trash, Plus, Check, X, Image, ChevronUp, ChevronDown, Upload } from 'lucide-react';
-import { uploadImage } from '../../services/imageService';
+import React, { useState, memo, useRef, useCallback } from 'react';
+import { Trash, Plus, ChevronUp, ChevronDown, Edit, AlertTriangle, GripVertical } from 'lucide-react';
+import MenuItemForm from './MenuItemForm';
+import { v4 as uuidv4 } from 'uuid';
+import { useConfig } from '../../context/ConfigContext';
+import { useFormatCurrency } from '../../utils/formatCurrency';
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  TouchSensor,
+  useSensor, 
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface MenuItem {
   id: string;
@@ -22,27 +43,206 @@ interface MenuItemEditorProps {
   onChange: (categories: Category[]) => void;
 }
 
+// Componente para renderizar cada elemento de menú con soporte para arrastrar y soltar
+const SortableMenuItemCard = memo<{
+  item: MenuItem;
+  index: number;
+  totalItems: number;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
+  onMove: (index: number, direction: 'up' | 'down') => void;
+}>(({ item, index, totalItems, onEdit, onDelete, onMove }) => {
+  const { config } = useConfig();
+  const formatCurrency = useFormatCurrency();
+  
+  // Configurar el comportamiento del elemento arrastrable
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: item.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 1,
+    position: 'relative' as const
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="bg-white border rounded-lg shadow-sm mb-4 overflow-hidden"
+    >
+      <div className="grid grid-cols-[120px_1fr] sm:grid-cols-[100px_1fr]">
+        {/* Imagen */}
+        <div className="bg-gray-100">
+          <div className="w-full h-full aspect-square overflow-hidden">
+            <img 
+              src={item.image} 
+              alt={item.name} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const imgSrc = item.image;
+                const imgTarget = e.target as HTMLImageElement;
+                
+                if (imgSrc.includes('?t=')) {
+                  const baseUrl = imgSrc.split('?')[0];
+                  imgTarget.src = `${baseUrl}?cache=${Date.now()}`;
+                } else {
+                  imgTarget.src = 'https://placehold.co/400x300/jpeg';
+                }
+              }}
+              crossOrigin="anonymous"
+            />
+          </div>
+        </div>
+        
+        {/* Contenido */}
+        <div className="p-3 flex flex-col justify-between">
+          <div>
+            <h3 className="font-medium text-sm sm:text-base">{item.name}</h3>
+            <p className="text-xs text-gray-500 line-clamp-1 mt-1 mb-2">
+              {item.description || <span className="italic">Sin descripción</span>}
+            </p>
+            
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium">
+                {formatCurrency(item.price)}
+              </span>
+              <span className="px-2 py-0.5 bg-gray-100 rounded-full text-xs">
+                ID: {item.id}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex justify-between items-center mt-3 pt-2 border-t">
+            {/* Botones de posición y drag handle */}
+            <div className="flex items-center gap-1">
+              <button 
+                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-100 touch-manipulation"
+                {...attributes}
+                {...listeners}
+                aria-label="Arrastrar para reordenar"
+              >
+                <GripVertical size={16} />
+              </button>
+              <button 
+                onClick={() => onMove(index, 'up')}
+                disabled={index === 0}
+                className={`p-1.5 rounded-full ${index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-100'}`}
+                aria-label="Mover arriba"
+              >
+                <ChevronUp size={16} />
+              </button>
+              <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{index + 1}</span>
+              <button 
+                onClick={() => onMove(index, 'down')}
+                disabled={index === totalItems - 1}
+                className={`p-1.5 rounded-full ${index === totalItems - 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-100'}`}
+                aria-label="Mover abajo"
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+            
+            {/* Botones de acción */}
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => onEdit(index)}
+                className="p-1.5 rounded-full text-blue-600 hover:bg-blue-50"
+                aria-label="Editar plato"
+              >
+                <Edit size={16} />
+              </button>
+              <button 
+                onClick={() => onDelete(index)}
+                className="p-1.5 rounded-full text-red-600 hover:bg-red-50"
+                aria-label="Eliminar plato"
+              >
+                <Trash size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+SortableMenuItemCard.displayName = 'SortableMenuItemCard';
+
 const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(categories[0]?.id || '');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newItem, setNewItem] = useState<MenuItem>({
-    id: '',
-    name: '',
-    description: '',
-    price: 0,
-    image: 'https://placehold.co/300x200/jpeg'
-  });
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   // Encontrar la categoría seleccionada
   const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
   const menuItems = selectedCategory?.items || [];
 
+  // Configurar sensores para DnD
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Distancia mínima para iniciar el arrastre
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250, // Delay para activar en dispositivos táctiles
+        tolerance: 5, // Tolerancia de movimiento
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Manejar el fin del arrastre
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = menuItems.findIndex(item => item.id === active.id);
+      const newIndex = menuItems.findIndex(item => item.id === over.id);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        handleReorderItems(oldIndex, newIndex);
+      }
+    }
+  };
+
+  // Función para reordenar elementos
+  const handleReorderItems = (oldIndex: number, newIndex: number) => {
+    if (!selectedCategory) return;
+    
+    const updatedCategories = [...categories];
+    const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
+    
+    if (categoryIndex === -1) return;
+    
+    // Usar arrayMove de dnd-kit para reordenar
+    updatedCategories[categoryIndex].items = arrayMove(
+      [...updatedCategories[categoryIndex].items],
+      oldIndex,
+      newIndex
+    );
+    
+    onChange(updatedCategories);
+  };
+
   // Generar un ID basado en el nombre
   const generateIdFromName = (name: string): string => {
+    if (!name) return uuidv4().substring(0, 8);
+    
     const baseId = name
       .toLowerCase()
       .replace(/\s+/g, '-')
@@ -60,96 +260,84 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
     return newId;
   };
 
+  // Abrir el modal para editar un elemento
   const handleEdit = (index: number) => {
     if (selectedCategory) {
+      setEditingItem({ ...selectedCategory.items[index] });
       setEditingItemIndex(index);
-      setNewItem({ ...selectedCategory.items[index] });
-      setShowAddForm(false);
+      setIsModalOpen(true);
     }
   };
 
+  // Abrir el modal para añadir un nuevo elemento
   const handleAdd = () => {
-    setEditingItemIndex(null);
-    setNewItem({
+    setEditingItem({
       id: '',
       name: '',
       description: '',
       price: 0,
       image: 'https://placehold.co/300x200/jpeg'
     });
-    setShowAddForm(true);
-  };
-
-  const handleCancel = () => {
     setEditingItemIndex(null);
-    setShowAddForm(false);
-    setUploadError(null);
+    setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!newItem.name.trim()) {
-      alert('El nombre del plato es obligatorio');
-      return;
-    }
+  // Cerrar el modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingItem(null);
+    setEditingItemIndex(null);
+  };
 
-    if (!selectedCategory) return;
+  // Abrir diálogo de confirmación para eliminar
+  const handleConfirmDelete = (index: number) => {
+    setDeleteIndex(index);
+    setDeleteConfirmOpen(true);
+  };
 
+  // Eliminar elemento
+  const handleDelete = () => {
+    if (!selectedCategory || deleteIndex === null) return;
+    
     const updatedCategories = [...categories];
     const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
     
     if (categoryIndex === -1) return;
-
-    // Si estamos editando un elemento existente
-    if (editingItemIndex !== null) {
-      const updatedItems = [...updatedCategories[categoryIndex].items];
-      updatedItems[editingItemIndex] = { ...newItem };
-      updatedCategories[categoryIndex].items = updatedItems;
-    } 
-    // Si estamos añadiendo un nuevo elemento
-    else if (showAddForm) {
-      // Generar ID si no se proporcionó
-      const itemToAdd = {
-        ...newItem,
-        id: newItem.id.trim() || generateIdFromName(newItem.name)
-      };
-      
-      updatedCategories[categoryIndex].items = [
-        ...updatedCategories[categoryIndex].items,
-        itemToAdd
-      ];
-    }
-
+    
+    // Eliminar el elemento
+    updatedCategories[categoryIndex].items.splice(deleteIndex, 1);
+    
     onChange(updatedCategories);
-    handleCancel();
+    setDeleteConfirmOpen(false);
+    setDeleteIndex(null);
   };
 
-  const handleDelete = (index: number) => {
+  // Guardar cambios en un elemento
+  const handleSave = (item: MenuItem) => {
     if (!selectedCategory) return;
     
-    if (window.confirm(`¿Estás seguro de que quieres eliminar "${selectedCategory.items[index].name}"?`)) {
-      const updatedCategories = [...categories];
-      const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
-      
-      if (categoryIndex === -1) return;
-
-      const updatedItems = [...updatedCategories[categoryIndex].items];
-      updatedItems.splice(index, 1);
-      updatedCategories[categoryIndex].items = updatedItems;
-      
-      onChange(updatedCategories);
+    const updatedCategories = [...categories];
+    const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
+    
+    if (categoryIndex === -1) return;
+    
+    if (editingItemIndex !== null) {
+      // Actualizar elemento existente
+      updatedCategories[categoryIndex].items[editingItemIndex] = item;
+    } else {
+      // Añadir nuevo elemento
+      // Si no se ha establecido un ID, generar uno basado en el nombre
+      if (!item.id) {
+        item.id = generateIdFromName(item.name);
+      }
+      updatedCategories[categoryIndex].items.push(item);
     }
+    
+    onChange(updatedCategories);
+    handleCloseModal();
   };
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    setNewItem({
-      ...newItem,
-      name,
-      // Solo actualizar el ID automáticamente si estamos añadiendo y el usuario no ha introducido un ID
-      id: showAddForm && !newItem.id ? generateIdFromName(name) : newItem.id
-    });
-  };
-
+  // Mover elemento arriba o abajo
   const handleMoveItem = (index: number, direction: 'up' | 'down') => {
     if (!selectedCategory) return;
     
@@ -159,331 +347,164 @@ const MenuItemEditor: React.FC<MenuItemEditorProps> = ({ categories, onChange })
       return;
     }
     
-    const updatedCategories = [...categories];
-    const categoryIndex = updatedCategories.findIndex(cat => cat.id === selectedCategoryId);
-    
-    if (categoryIndex === -1) return;
-    
-    const items = [...updatedCategories[categoryIndex].items];
     const newIndex = direction === 'up' ? index - 1 : index + 1;
-    
-    // Intercambiar elementos
-    [items[index], items[newIndex]] = [items[newIndex], items[index]];
-    
-    updatedCategories[categoryIndex].items = items;
-    onChange(updatedCategories);
-  };
-
-  // Función para manejar la subida de imágenes
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    
-    setIsUploading(true);
-    setUploadError(null);
-    
-    try {
-      const result = await uploadImage(file);
-      
-      // Actualizar el estado con la URL de la imagen
-      setNewItem({ ...newItem, image: result.url });
-      
-    } catch (error: any) {
-      console.error('Error al subir imagen:', error);
-      setUploadError(error.message || 'Error al subir la imagen');
-    } finally {
-      setIsUploading(false);
-      // Limpiar el input para permitir seleccionar el mismo archivo
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  // Función para abrir el selector de archivos
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    handleReorderItems(index, newIndex);
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Editor de Platos</h2>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-base sm:text-lg font-semibold">Editor de Platos</h2>
+        
+        <button
+          onClick={handleAdd}
+          className="flex items-center gap-1 py-2 px-4 bg-green-600 text-white font-medium rounded text-sm hover:bg-green-700"
+        >
+          <Plus size={16} />
+          <span className="hidden sm:inline">Añadir Plato</span>
+          <span className="sm:hidden">Añadir</span>
+        </button>
+      </div>
 
       {/* Selector de categoría */}
-      <div className="mb-6">
+      <div className="mb-4">
         <label className="block text-sm font-medium mb-1">Categoría</label>
         <select
           value={selectedCategoryId}
           onChange={(e) => setSelectedCategoryId(e.target.value)}
           className="w-full p-2 border border-gray-300 rounded"
         >
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.icon} {category.name}
-            </option>
-          ))}
+          {categories.length === 0 ? (
+            <option value="" disabled>No hay categorías disponibles</option>
+          ) : (
+            categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.icon} {category.name} ({category.items.length} platos)
+              </option>
+            ))
+          )}
         </select>
       </div>
+
+      {/* Mensaje si no hay categorías */}
+      {categories.length === 0 && (
+        <div className="text-center py-8 px-4 border-2 border-dashed border-gray-300 rounded-lg">
+          <p className="text-gray-500">No hay categorías disponibles para añadir platos.</p>
+          <p className="text-gray-500 mt-2">Primero debes crear al menos una categoría en la sección "Categorías".</p>
+        </div>
+      )}
 
       {/* Lista de elementos del menú */}
       {selectedCategory && (
         <>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-medium">Platos en {selectedCategory.name}</h3>
-            {!showAddForm && editingItemIndex === null && (
-              <button
-                onClick={handleAdd}
-                className="flex items-center gap-1 text-sm py-1 px-3 bg-gray-100 hover:bg-gray-200 rounded"
-              >
-                <Plus size={16} /> Añadir Plato
-              </button>
-            )}
-          </div>
-
-          {/* Instrucciones de ordenamiento */}
+          {/* Instrucciones */}
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
             <p className="flex items-center">
               <span className="mr-2">ℹ️</span>
-              <span>Ahora puedes cambiar el orden de los platos usando los botones <ChevronUp size={14} className="inline mx-1" /> y <ChevronDown size={14} className="inline mx-1" /> en la columna "Orden / Acciones". El orden en que aparecen aquí será el mismo que verán los clientes en el menú.</span>
+              <span>Puedes cambiar el orden de los platos usando los botones de flechas o arrastrando con el ícono de agarre. El orden aquí será el mismo que verán los clientes en el menú.</span>
             </p>
           </div>
 
-          {/* Formulario para añadir/editar */}
-          {(showAddForm || editingItemIndex !== null) && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-              <h4 className="font-medium mb-3">
-                {editingItemIndex !== null ? 'Editar Plato' : 'Añadir Nuevo Plato'}
-              </h4>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm mb-1">Nombre</label>
-                  <input
-                    type="text"
-                    value={newItem.name}
-                    onChange={handleNameChange}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    placeholder="Ej: Hamburguesa Clásica"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm mb-1">ID (slug)</label>
-                  <input
-                    type="text"
-                    value={newItem.id}
-                    onChange={(e) => setNewItem({ ...newItem, id: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    placeholder="Ej: hamburguesa-clasica"
-                    disabled={editingItemIndex !== null}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    El ID debe ser único. Se generará automáticamente si lo dejas en blanco.
-                  </p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm mb-1">Descripción</label>
-                  <textarea
-                    value={newItem.description}
-                    onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    rows={2}
-                    placeholder="Breve descripción del plato"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm mb-1">Precio</label>
-                  <input
-                    type="number"
-                    value={newItem.price}
-                    onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full p-2 border border-gray-300 rounded"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm mb-1">Imagen</label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={newItem.image}
-                      onChange={(e) => setNewItem({ ...newItem, image: e.target.value })}
-                      className="flex-1 p-2 border border-gray-300 rounded"
-                      placeholder="https://ejemplo.com/imagen.jpg"
-                    />
-                    <button
-                      onClick={triggerFileInput}
-                      disabled={isUploading}
-                      className="flex items-center gap-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      type="button"
-                    >
-                      {isUploading ? (
-                        <span>Subiendo...</span>
-                      ) : (
-                        <>
-                          <Upload size={16} /> Subir
-                        </>
-                      )}
-                    </button>
-                    {/* Input oculto para la carga de archivos */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      style={{ display: 'none' }}
-                    />
-                  </div>
-                  {uploadError && (
-                    <p className="text-xs text-red-500 mt-1">{uploadError}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Ingresa la URL de una imagen o sube una desde tu dispositivo.
-                  </p>
-                </div>
-                
-                <div className="flex items-start space-x-2">
-                  <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                    {newItem.image ? (
-                      <img 
-                        src={newItem.image} 
-                        alt="Vista previa" 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://placehold.co/300x200/jpeg';
-                        }}
-                      />
-                    ) : (
-                      <Image className="text-gray-400" size={24} />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-500">
-                      Vista previa. Recomendamos usar imágenes cuadradas de al menos 300x300 píxeles.
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end space-x-2 pt-2">
-                  <button
-                    onClick={handleCancel}
-                    className="py-1 px-3 bg-gray-100 hover:bg-gray-200 rounded text-sm"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="py-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm flex items-center gap-1"
-                  >
-                    <Check size={16} /> Guardar
-                  </button>
-                </div>
-              </div>
+          {/* Lista de platos con soporte para drag and drop */}
+          {menuItems.length === 0 ? (
+            <div className="text-center py-8 px-4 border-2 border-dashed border-gray-300 rounded-lg">
+              <p className="text-gray-500">No hay platos en esta categoría</p>
+              <button 
+                onClick={handleAdd}
+                className="mt-2 text-blue-500 hover:underline"
+              >
+                Añadir el primer plato
+              </button>
             </div>
+          ) : (
+            <DndContext 
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext 
+                items={menuItems.map(item => item.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="grid grid-cols-1 gap-3">
+                  {menuItems.map((item, index) => (
+                    <SortableMenuItemCard
+                      key={item.id}
+                      item={item}
+                      index={index}
+                      totalItems={menuItems.length}
+                      onEdit={handleEdit}
+                      onDelete={handleConfirmDelete}
+                      onMove={handleMoveItem}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
-
-          {/* Lista de platos */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Imagen
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nombre
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Descripción
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Precio
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Orden / Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {menuItems.length > 0 ? (
-                  menuItems.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="w-12 h-12 bg-gray-100 rounded overflow-hidden">
-                          <img 
-                            src={item.image} 
-                            alt={item.name} 
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://placehold.co/300x200/jpeg';
-                            }}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">{item.name}</div>
-                        <div className="text-sm text-gray-500">ID: {item.id}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-500 line-clamp-2">{item.description}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{item.price.toFixed(2)}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <div className="flex flex-col">
-                            <button 
-                              onClick={() => handleMoveItem(index, 'up')}
-                              disabled={index === 0}
-                              className={`text-gray-600 hover:text-gray-900 ${index === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              title="Mover arriba"
-                            >
-                              <ChevronUp size={16} />
-                            </button>
-                            <span className="text-xs text-center text-gray-500">{index + 1}</span>
-                            <button 
-                              onClick={() => handleMoveItem(index, 'down')}
-                              disabled={index === menuItems.length - 1}
-                              className={`text-gray-600 hover:text-gray-900 ${index === menuItems.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                              title="Mover abajo"
-                            >
-                              <ChevronDown size={16} />
-                            </button>
-                          </div>
-                          <button 
-                            onClick={() => handleEdit(index)}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(index)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            <Trash size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No hay platos en esta categoría. ¡Añade el primero!
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </>
+      )}
+
+      {/* Modal para editar/añadir plato */}
+      {isModalOpen && editingItem && (
+        <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div className="flex justify-between items-center px-4 py-3 border-b">
+              <h3 className="font-medium">
+                {editingItemIndex !== null ? 'Editar Plato' : 'Añadir Nuevo Plato'}
+              </h3>
+              <button 
+                onClick={handleCloseModal}
+                className="p-1 rounded-full hover:bg-gray-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <MenuItemForm
+                item={editingItem}
+                onChange={setEditingItem}
+                onSave={() => handleSave(editingItem)}
+                onCancel={handleCloseModal}
+                isNew={editingItemIndex === null}
+                generateId={generateIdFromName}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación para eliminar */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="text-center mb-6">
+              <AlertTriangle size={48} className="mx-auto mb-4 text-red-500" />
+              <h3 className="text-lg font-medium mb-2">Confirmar eliminación</h3>
+              <p className="text-gray-600">
+                ¿Estás seguro de que deseas eliminar este plato? Esta acción no se puede deshacer.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

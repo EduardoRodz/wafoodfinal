@@ -240,11 +240,11 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
                 onChange={handleInputChange}
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="admin">Administrador</option>
+                <option value="admin">Admin</option>
                 <option value="staff">Personal</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Administrador: Acceso completo. Personal: Solo menú y categorías.
+                Admin: Acceso completo. Personal: Solo menú y categorías.
               </p>
             </div>
             
@@ -393,7 +393,7 @@ const UserManager: React.FC<UserManagerProps> = ({ currentUserEmail, themeColor 
                         ? 'bg-purple-100 text-purple-800' 
                         : 'bg-blue-100 text-blue-800'
                     }`}>
-                      {user.role === 'admin' ? 'Administrador' : 'Personal'}
+                      {user.role === 'admin' ? 'Admin' : 'Personal'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

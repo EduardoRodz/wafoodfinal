@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración de Base de Datos - WaFood</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9fafb;
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      max-width: 800px;
+      margin: 2rem auto;
+    }
+    .log {
+      background-color: #f3f4f6;
+      border-radius: 4px;
+      padding: 1rem;
+      margin-top: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+    .log-entry {
+      margin-bottom: 0.5rem;
+      padding: 0.25rem;
+      border-left: 3px solid transparent;
+    }
+    .log-info {
+      border-left-color: #3b82f6;
+    }
+    .log-success {
+      border-left-color: #10b981;
+    }
+    .log-error {
+      border-left-color: #ef4444;
+    }
+    .progress-container {
+      display: none;
+      margin-top: 1.5rem;
+    }
+    .progress-bar {
+      height: 8px;
+      background-color: #e5e7eb;
+      border-radius: 4px;
+      margin: 0.5rem 0;
+    }
+    .progress {
+      height: 100%;
+      background-color: #10b981;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body class="p-4">
+  <div class="card">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">Configuración de Base de Datos WaFood</h1>
+    
+    <div class="mb-6 bg-blue-50 p-4 rounded-md border border-blue-100">
+      <h2 class="font-medium text-blue-800 mb-2">Instrucciones</h2>
+      <p class="text-blue-700 text-sm">
+        Esta herramienta configurará automáticamente todas las tablas necesarias para WaFood en tu proyecto de Supabase.
+        Solo necesitas proporcionar la URL de tu proyecto y la clave de servicio (service_role key).
+      </p>
+    </div>
+
+    <div class="border-b border-gray-200 mb-6">
+      <ul class="flex flex-wrap -mb-px">
+        <li class="mr-2">
+          <button class="tab-button inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 active" data-tab="automatic">Configuración Automática</button>
+        </li>
+        <li class="mr-2">
+          <button class="tab-button inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300" data-tab="manual">Configuración Manual</button>
+        </li>
+      </ul>
+    </div>
+    
+    <div id="automatic-tab" class="tab-content active">
+      <div class="space-y-4">
+        <div>
+          <label for="supabaseUrl" class="block text-sm font-medium text-gray-700 mb-1">URL de Supabase:</label>
+          <input type="text" id="supabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co" class="w-full p-2 border border-gray-300 rounded-md">
+          <p class="mt-1 text-xs text-gray-500">Puedes encontrar esto en la sección Configuración del Proyecto > API en tu dashboard de Supabase.</p>
+        </div>
+        
+        <div>
+          <label for="serviceKey" class="block text-sm font-medium text-gray-700 mb-1">Clave de servicio (service_role key):</label>
+          <input type="password" id="serviceKey" placeholder="eyJhb..." class="w-full p-2 border border-gray-300 rounded-md">
+          <p class="mt-1 text-xs text-gray-500">Esta es la clave "service_role" que puedes encontrar en Configuración del Proyecto > API > service_role key.</p>
+        </div>
+        
+        <div class="flex space-x-2 pt-4">
+          <button id="setupButton" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition">
+            Configurar Base de Datos
+          </button>
+          <button id="home-button" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition">
+            Volver al Instalador
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="manual-tab" class="tab-content">
+      <div class="space-y-4">
+        <h3 class="font-medium text-lg">Configuración Manual de Base de Datos</h3>
+        <p>Si prefieres configurar la base de datos manualmente, sigue estos pasos:</p>
+        
+        <ol class="list-decimal pl-5 space-y-3">
+          <li>
+            <p>Accede al <a href="https://app.supabase.com" target="_blank" class="text-blue-600 hover:underline">Dashboard de Supabase</a> y selecciona tu proyecto.</p>
+          </li>
+          <li>
+            <p>Ve a la sección "SQL Editor" en el menú lateral.</p>
+          </li>
+          <li>
+            <p>Crea una nueva consulta y pega el siguiente código SQL:</p>
+            <div class="bg-gray-100 p-3 rounded-md mt-2 overflow-auto">
+              <button id="copyButton" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm py-1 px-2 rounded-md float-right">
+                Copiar SQL
+              </button>
+              <pre id="sqlScript" class="text-sm text-gray-800 whitespace-pre-wrap"></pre>
+            </div>
+          </li>
+          <li>
+            <p>Ejecuta el script SQL haciendo clic en el botón "Run" (o presiona Ctrl+Enter).</p>
+            <p class="text-sm text-gray-600 mt-1">Nota: Si el script es muy largo, puede ser necesario dividirlo en partes más pequeñas y ejecutarlas por separado.</p>
+          </li>
+          <li>
+            <p>Verifica que las tablas se hayan creado correctamente yendo a la sección "Table Editor" en el menú lateral. Deberías ver las siguientes tablas:</p>
+            <ul class="list-disc pl-5 mt-2 text-sm">
+              <li><strong>profiles</strong> - Para almacenar perfiles de usuario</li>
+              <li><strong>site_config</strong> - Para almacenar la configuración de la aplicación</li>
+              <li><strong>orders</strong> - Para almacenar los pedidos de los clientes</li>
+            </ul>
+          </li>
+          <li>
+            <p>Una vez completado, vuelve al instalador para continuar con la configuración.</p>
+            <button id="return-to-installer" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition">
+              Volver al Instalador
+            </button>
+          </li>
+        </ol>
+      </div>
+    </div>
+    
+    <div id="progressContainer" class="progress-container">
+      <h3 class="font-medium text-gray-700 mb-2">Progreso:</h3>
+      <div class="progress-bar">
+        <div class="progress" id="progressBar"></div>
+      </div>
+      <div id="progressText" class="text-sm text-center text-gray-600 mb-2">0%</div>
+      
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+  
+  <script>
+    // Cargar el script SQL desde el archivo schema.sql
+    fetch('/schema.sql')
+      .then(response => response.text())
+      .then(sql => {
+        document.getElementById('sqlScript').textContent = sql;
+      });
+    
+    // Funciones para las pestañas
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.addEventListener('click', () => {
+        // Desactivar todas las pestañas
+        document.querySelectorAll('.tab-button').forEach(btn => {
+          btn.classList.remove('active', 'border-blue-600', 'text-blue-600');
+          btn.classList.add('border-transparent');
+        });
+        
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.remove('active');
+        });
+        
+        // Activar la pestaña seleccionada
+        button.classList.add('active', 'border-blue-600', 'text-blue-600');
+        const tabId = button.getAttribute('data-tab');
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+      });
+    });
+    
+    // Copiar SQL al portapapeles
+    document.getElementById('copyButton').addEventListener('click', function() {
+      const sqlCode = document.getElementById('sqlScript').textContent;
+      
+      navigator.clipboard.writeText(sqlCode)
+        .then(() => {
+          this.textContent = '✅ Copiado!';
+          setTimeout(() => {
+            this.textContent = 'Copiar SQL';
+          }, 2000);
+        })
+        .catch(err => {
+          console.error('Error al copiar: ', err);
+          this.textContent = '❌ Error al copiar';
+          setTimeout(() => {
+            this.textContent = 'Copiar SQL';
+          }, 2000);
+        });
+    });
+    
+    // Almacenar los valores anteriores si existen
+    document.addEventListener('DOMContentLoaded', function() {
+      if (localStorage.getItem('supabaseUrl')) {
+        document.getElementById('supabaseUrl').value = localStorage.getItem('supabaseUrl');
+      }
+      if (localStorage.getItem('supabaseServiceKey')) {
+        document.getElementById('serviceKey').value = localStorage.getItem('supabaseServiceKey');
+      }
+    });
+    
+    // Botón para volver al instalador
+    document.getElementById('home-button').addEventListener('click', function() {
+      window.location.href = '/';
+    });
+    
+    // Botón para volver al instalador desde la pestaña manual
+    document.getElementById('return-to-installer').addEventListener('click', function() {
+      window.location.href = '/';
+    });
+    
+    // Función para añadir entradas al log
+    function addLogEntry(message, type = 'info') {
+      const log = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = message;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+    
+    // Función para actualizar la barra de progreso
+    function updateProgress(percent) {
+      document.getElementById('progressBar').style.width = `${percent}%`;
+      document.getElementById('progressText').textContent = `${percent}%`;
+    }
+    
+    // Configuración de la base de datos
+    document.getElementById('setupButton').addEventListener('click', async function() {
+      const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+      const serviceKey = document.getElementById('serviceKey').value.trim();
+      
+      if (!supabaseUrl || !serviceKey) {
+        alert('Por favor, complete todos los campos.');
+        return;
+      }
+      
+      // Guardar en localStorage
+      localStorage.setItem('supabaseUrl', supabaseUrl);
+      localStorage.setItem('supabaseServiceKey', serviceKey);
+      
+      // Mostrar el contenedor de progreso
+      document.getElementById('progressContainer').style.display = 'block';
+      
+      // Desactivar el botón durante la configuración
+      this.disabled = true;
+      this.textContent = 'Configurando...';
+      
+      addLogEntry('Iniciando configuración de la base de datos...', 'info');
+      updateProgress(5);
+      
+      try {
+        // 1. Crear función para configurar la base de datos
+        addLogEntry('Paso 1: Creando función de configuración...', 'info');
+        
+        const createSetupFunction = `
+          CREATE OR REPLACE FUNCTION setup_wafood_database()
+          RETURNS text AS $$
+          DECLARE
+            result text;
+          BEGIN
+            -- Configurar extensiones necesarias
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+            
+            -- Crear función auxiliar para verificación de conexión
+            CREATE OR REPLACE FUNCTION now()
+            RETURNS TIMESTAMPTZ AS $$
+            BEGIN
+              RETURN CURRENT_TIMESTAMP;
+            END;
+            $$ LANGUAGE plpgsql;
+            
+            -- Tabla para perfiles de usuario
+            CREATE TABLE IF NOT EXISTS profiles (
+              id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+              email TEXT UNIQUE NOT NULL,
+              role TEXT NOT NULL DEFAULT 'customer',
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Permitir acceso a la tabla profiles
+            ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+            
+            -- Políticas de RLS para perfiles
+            -- Los usuarios pueden leer todos los perfiles
+            CREATE POLICY IF NOT EXISTS "Perfiles visibles para todos los usuarios autenticados" 
+              ON profiles FOR SELECT 
+              USING (auth.role() = 'authenticated');
+            
+            -- Los usuarios solo pueden actualizar su propio perfil
+            CREATE POLICY IF NOT EXISTS "Los usuarios pueden actualizar su propio perfil" 
+              ON profiles FOR UPDATE 
+              USING (auth.uid() = id);
+            
+            -- Los administradores pueden hacer todo
+            CREATE POLICY IF NOT EXISTS "Los administradores pueden hacer todo con los perfiles" 
+              ON profiles FOR ALL 
+              USING (auth.jwt() ->> 'role' = 'admin');
+            
+            -- Función para manejar nuevos usuarios
+            CREATE OR REPLACE FUNCTION public.handle_new_user() 
+            RETURNS TRIGGER AS $$
+            BEGIN
+              INSERT INTO public.profiles (id, email, role)
+              VALUES (new.id, new.email, COALESCE(new.raw_user_meta_data->>'role', 'customer'));
+              RETURN new;
+            END;
+            $$ LANGUAGE plpgsql SECURITY DEFINER;
+            
+            -- Trigger para crear perfil al crear usuario
+            DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+            CREATE TRIGGER on_auth_user_created
+              AFTER INSERT ON auth.users
+              FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+            
+            -- Tabla para la configuración del sitio
+            DROP TABLE IF EXISTS site_config;
+            CREATE TABLE IF NOT EXISTS site_config (
+              id SERIAL PRIMARY KEY,
+              key TEXT NOT NULL UNIQUE,
+              value JSONB NOT NULL,
+              description TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Configurar RLS para la tabla site_config
+            ALTER TABLE site_config ENABLE ROW LEVEL SECURITY;
+            
+            -- Políticas para site_config
+            -- Cualquier usuario puede leer la configuración
+            CREATE POLICY IF NOT EXISTS "Cualquier usuario puede leer la configuración" 
+              ON site_config FOR SELECT 
+              TO authenticated, anon;
+            
+            -- Solo administradores pueden actualizar la configuración
+            CREATE POLICY IF NOT EXISTS "Solo administradores pueden actualizar la configuración" 
+              ON site_config FOR ALL 
+              USING (auth.jwt() ->> 'role' = 'admin');
+            
+            -- Tabla para órdenes
+            CREATE TABLE IF NOT EXISTS orders (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+              customer_name TEXT NOT NULL,
+              customer_phone TEXT NOT NULL,
+              customer_address TEXT,
+              items JSONB NOT NULL,
+              subtotal DECIMAL(10, 2) NOT NULL,
+              total DECIMAL(10, 2) NOT NULL,
+              payment_method TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'pending',
+              notes TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+            
+            -- Configurar RLS para órdenes
+            ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+            
+            -- Políticas para órdenes
+            -- Los usuarios pueden ver sus propias órdenes
+            CREATE POLICY IF NOT EXISTS "Los usuarios pueden ver sus propias órdenes" 
+              ON orders FOR SELECT 
+              USING (auth.uid() = user_id);
+            
+            -- Los administradores pueden hacer todo con las órdenes
+            CREATE POLICY IF NOT EXISTS "Los administradores pueden hacer todo con las órdenes" 
+              ON orders FOR ALL 
+              USING (auth.jwt() ->> 'role' = 'admin');
+            
+            -- Los usuarios anónimos pueden crear órdenes (para pedidos sin registro)
+            CREATE POLICY IF NOT EXISTS "Los usuarios anónimos pueden crear órdenes" 
+              ON orders FOR INSERT 
+              WITH CHECK (auth.role() = 'anon' OR auth.role() = 'authenticated');
+            
+            -- Función para actualizar el timestamp de actualización
+            CREATE OR REPLACE FUNCTION update_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+              NEW.updated_at = NOW();
+              RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            
+            -- Crear triggers para actualizar los timestamps
+            DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
+            CREATE TRIGGER set_profiles_updated_at
+              BEFORE UPDATE ON profiles
+              FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
+            
+            DROP TRIGGER IF EXISTS set_site_config_updated_at ON site_config;
+            CREATE TRIGGER set_site_config_updated_at
+              BEFORE UPDATE ON site_config
+              FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
+            
+            DROP TRIGGER IF EXISTS set_orders_updated_at ON orders;
+            CREATE TRIGGER set_orders_updated_at
+              BEFORE UPDATE ON orders
+              FOR EACH ROW EXECUTE PROCEDURE update_updated_at();
+            
+            -- Insertar configuraciones predeterminadas si no existen
+            INSERT INTO site_config (key, value, description)
+            VALUES 
+              ('installation_status', '"pending"'::jsonb, 'Estado de la instalación del sistema'),
+              ('restaurant_config', '{"restaurantName": "WHATSFOOD", "whatsappNumber": "18091234567", "currency": "RD$", "openingHours": "8:00 AM - 10:00 PM"}'::jsonb, 'Configuración general del restaurante')
+            ON CONFLICT (key) DO NOTHING;
+            
+            -- Crear bucket para imágenes de menú
+            BEGIN
+              INSERT INTO storage.buckets (id, name, public)
+              VALUES ('menu-images', 'menu-images', true)
+              ON CONFLICT (id) DO NOTHING;
+              
+              -- Políticas para imágenes
+              CREATE POLICY IF NOT EXISTS "Imágenes de menú accesibles públicamente" 
+                ON storage.objects FOR SELECT 
+                USING (bucket_id = 'menu-images');
+              
+              CREATE POLICY IF NOT EXISTS "Solo administradores pueden subir imágenes" 
+                ON storage.objects FOR INSERT 
+                WITH CHECK (bucket_id = 'menu-images' AND auth.jwt() ->> 'role' = 'admin');
+              
+              CREATE POLICY IF NOT EXISTS "Solo administradores pueden modificar imágenes" 
+                ON storage.objects FOR UPDATE 
+                USING (bucket_id = 'menu-images' AND auth.jwt() ->> 'role' = 'admin');
+              
+              CREATE POLICY IF NOT EXISTS "Solo administradores pueden eliminar imágenes" 
+                ON storage.objects FOR DELETE 
+                USING (bucket_id = 'menu-images' AND auth.jwt() ->> 'role' = 'admin');
+            EXCEPTION
+              WHEN OTHERS THEN
+                -- Ignorar errores relacionados con el bucket de almacenamiento
+                NULL;
+            END;
+            
+            result := 'Base de datos configurada correctamente';
+            RETURN result;
+          EXCEPTION
+            WHEN OTHERS THEN
+              result := 'Error: ' || SQLERRM;
+              RETURN result;
+          END;
+          $$ LANGUAGE plpgsql SECURITY DEFINER;
+        `;
+        
+        // Crear la función de configuración
+        const createFunctionResponse = await fetch(`${supabaseUrl}/rest/v1/sql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Prefer': 'resolution=ignore-duplicates,return=minimal'
+          },
+          body: JSON.stringify({
+            query: createSetupFunction
+          })
+        });
+        
+        if (!createFunctionResponse.ok) {
+          const errorText = await createFunctionResponse.text();
+          throw new Error(`Error al crear función de configuración: ${errorText}`);
+        }
+        
+        updateProgress(30);
+        addLogEntry('Función de configuración creada correctamente', 'success');
+        
+        // 2. Ejecutar la función de configuración
+        addLogEntry('Paso 2: Ejecutando configuración de base de datos...', 'info');
+        
+        const setupResponse = await fetch(`${supabaseUrl}/rest/v1/sql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Prefer': 'resolution=ignore-duplicates,return=minimal'
+          },
+          body: JSON.stringify({
+            query: "SELECT setup_wafood_database();"
+          })
+        });
+        
+        if (!setupResponse.ok) {
+          const errorText = await setupResponse.text();
+          throw new Error(`Error al configurar base de datos: ${errorText}`);
+        }
+        
+        const setupResult = await setupResponse.json();
+        updateProgress(90);
+        
+        if (setupResult && setupResult.length > 0 && setupResult[0].setup_wafood_database && setupResult[0].setup_wafood_database.includes('Error')) {
+          addLogEntry(`Advertencia: ${setupResult[0].setup_wafood_database}`, 'error');
+        } else {
+          addLogEntry(`Base de datos configurada correctamente`, 'success');
+        }
+        
+        // 3. Verificar la configuración
+        addLogEntry('Paso 3: Verificando configuración...', 'info');
+        
+        // Intentar verificar si la tabla site_config existe
+        const verifyResponse = await fetch(`${supabaseUrl}/rest/v1/site_config?select=*&limit=1`, {
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`
+          }
+        });
+        
+        // Si hay un error, probablemente la tabla no existe, intentar ejecutar el SQL directamente
+        if (!verifyResponse.ok) {
+          addLogEntry('No se encontró la tabla site_config. Intentando método alternativo...', 'info');
+          
+          // Leer el script SQL desde el archivo schema.sql
+          const schemaResponse = await fetch('/schema.sql');
+          const schemaSQL = await schemaResponse.text();
+          
+          // Dividir el SQL en instrucciones individuales
+          const statements = schemaSQL
+            .split(';')
+            .map(stmt => stmt.trim())
+            .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+          
+          addLogEntry(`Ejecutando ${statements.length} instrucciones SQL directamente...`, 'info');
+          
+          // Ejecutar cada instrucción por separado
+          let completedStatements = 0;
+          for (let i = 0; i < statements.length; i++) {
+            try {
+              const stmt = statements[i];
+              const stmtResponse = await fetch(`${supabaseUrl}/rest/v1/sql`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': serviceKey,
+                  'Authorization': `Bearer ${serviceKey}`,
+                  'Prefer': 'resolution=ignore-duplicates,return=minimal'
+                },
+                body: JSON.stringify({
+                  query: stmt
+                })
+              });
+              
+              if (stmtResponse.ok) {
+                completedStatements++;
+                // Actualizar progreso
+                const progress = Math.round(90 + (completedStatements / statements.length) * 10);
+                updateProgress(progress);
+              }
+            } catch (stmtError) {
+              console.error(`Error en instrucción ${i+1}:`, stmtError);
+              // Continuar con la siguiente instrucción
+            }
+          }
+          
+          addLogEntry(`Completadas ${completedStatements} de ${statements.length} instrucciones SQL.`, 'info');
+          
+          // Verificar nuevamente si la tabla site_config existe
+          const verifyAgainResponse = await fetch(`${supabaseUrl}/rest/v1/site_config?select=*&limit=1`, {
+            headers: {
+              'apikey': serviceKey,
+              'Authorization': `Bearer ${serviceKey}`
+            }
+          });
+          
+          if (!verifyAgainResponse.ok) {
+            throw new Error('No se pudo crear la tabla site_config. Por favor, intente con la configuración manual.');
+          }
+        }
+        
+        updateProgress(100);
+        addLogEntry('✅ Configuración completada correctamente!', 'success');
+        addLogEntry('Puedes volver al instalador para continuar con la configuración.', 'info');
+        
+                // 4. Marcar el instalador como completado en Supabase        console.log("Marcando instalación como completada...");        try {          // Actualizar directamente en Supabase usando una llamada a la API          const installStatusResponse = await fetch(`${supabaseUrl}/rest/v1/site_config`, {            method: 'POST',            headers: {              'Content-Type': 'application/json',              'apikey': serviceKey,              'Authorization': `Bearer ${serviceKey}`,              'Prefer': 'resolution=merge-duplicates'            },            body: JSON.stringify({              key: 'installation_status',              value: 'completed',              description: 'Estado de la instalación del sistema'            })          });                    if (!installStatusResponse.ok) {            const errorText = await installStatusResponse.text();            throw new Error(`Error al marcar instalación como completada: ${errorText}`);          }                    // También almacenar en localStorage como respaldo          const randomName = 'installer_' + Math.random().toString(36).substring(2, 15);          localStorage.setItem('installerCompleted', randomName);                    addLogEntry('✅ Estado de instalación marcado como completado', 'success');        } catch (error) {          console.error("Error al marcar la instalación como completada:", error);          addLogEntry(`⚠️ No se pudo marcar el estado de instalación: ${error.message}`, 'error');          // A pesar del error, continuamos ya que la base de datos está configurada        }
+        
+        // Habilitar el botón nuevamente
+        this.disabled = false;
+        this.textContent = 'Configuración Completada';
+        this.className = 'bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition';
+        
+      } catch (error) {
+        addLogEntry(`❌ Error: ${error.message}`, 'error');
+        
+        // Sugerir solución
+        addLogEntry('Sugerencias:', 'info');
+        addLogEntry('1. Verifica que la URL y la clave de servicio sean correctas', 'info');
+        addLogEntry('2. Asegúrate de estar usando la clave service_role y no la anon', 'info');
+        addLogEntry('3. Intenta la configuración manual usando la pestaña "Configuración Manual"', 'info');
+        
+        // Habilitar el botón nuevamente
+        this.disabled = false;
+        this.textContent = 'Reintentar Configuración';
+      }
+    });
+  </script>
+</body>
+</html> 

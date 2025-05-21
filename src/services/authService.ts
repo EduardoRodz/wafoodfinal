@@ -45,15 +45,45 @@ export const logout = async (): Promise<{ error: Error | null }> => {
 
 export const getCurrentUser = async (): Promise<{ user: any | null, error: Error | null }> => {
   try {
+    // No verificar usuario en la página del instalador
+    if (window.location.pathname === '/instalador') {
+      console.log('En la página del instalador, no se verificará el usuario');
+      return { user: null, error: null };
+    }
+    
+    // Verificar si hay una sesión almacenada antes de intentar obtener el usuario
+    const { data: session } = await supabase.auth.getSession();
+    
+    if (!session.session) {
+      // No hay sesión, por lo que no hay usuario autenticado
+      return { user: null, error: null };
+    }
+    
+    // Hay sesión, intentamos obtener el usuario
     const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error) {
+      // Si hay un error relacionado con token inválido o claim faltante,
+      // es probable que la sesión esté corrupta o haya expirado
+      if (error.message?.includes('invalid claim') || error.message?.includes('JWT')) {
+        console.warn('Sesión inválida detectada, cerrando sesión...');
+        // Intentar limpiar la sesión localmente
+        await supabase.auth.signOut({ scope: 'local' });
+        return { user: null, error: null };
+      }
+      
       throw error;
     }
     
     return { user, error: null };
   } catch (error) {
     console.error('Error obteniendo usuario actual:', error);
+    // Intenta limpiar la sesión local en caso de error para prevenir futuros problemas
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (signOutError) {
+      console.error('Error adicional al intentar cerrar sesión:', signOutError);
+    }
     return { user: null, error: error as Error };
   }
 };

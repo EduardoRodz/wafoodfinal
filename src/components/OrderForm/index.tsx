@@ -6,11 +6,13 @@ import { CashPayment } from './CashPayment';
 import { AdditionalComments } from './AdditionalComments';
 import { SubmitButton } from './SubmitButton';
 import { useCart } from '../../context/CartContext';
-import { defaultConfig } from '../../config';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { useConfig } from '../../context/ConfigContext';
+import { useFormatCurrency } from '../../utils/formatCurrency';
 import { useOrderForm } from './useOrderForm';
 
 const OrderForm: React.FC = () => {
+  const { config } = useConfig();
+  const formatCurrency = useFormatCurrency();
   const { items, totalAmount } = useCart();
   const { 
     name, setName,

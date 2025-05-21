@@ -129,11 +129,17 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ config, onChange }) =
         <label className="block text-sm font-medium mb-1">Texto del Pie de Página</label>
         <input
           type="text"
-          value={config.footerText}
-          onChange={(e) => onChange({ ...config, footerText: e.target.value })}
+          value={config.footerText || ''}
+          onChange={(e) => {
+            console.log('Nuevo valor de footerText:', e.target.value);
+            onChange({ ...config, footerText: e.target.value })
+          }}
           className="w-full p-2 border border-gray-300 rounded"
           placeholder="Ej: © 2023 Mi Restaurante. Todos los derechos reservados."
         />
+        <p className="text-xs text-gray-500 mt-1">
+          Este texto se mostrará en el pie de página de su sitio web. Se carga desde la columna footer_text en Supabase.
+        </p>
       </div>
       
       <div className="pt-4 border-t border-gray-200">

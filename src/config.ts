@@ -22,6 +22,7 @@ export const defaultConfig = {
   whatsappNumber: "18092010357", // Format: country code + number, no spaces or symbols
   currency: "RD$",
   openingHours: "8:00 AM - 10:00 PM",
+  footerText: "", // Default empty footer text
 
   // Theme configuration
   theme: {
@@ -165,44 +166,38 @@ export const defaultConfig = {
   ],
 };
 
-// Función para cargar configuración desde Supabase
-const loadConfig = async () => {
+// Intentar cargar la configuración desde localStorage como fallback temporal
+// Esta función se mantendrá por compatibilidad, pero se recomienda usar configService
+const loadConfig = () => {
   try {
-    const { data, error } = await supabase
-      .from('site_config')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) throw error;
-    
-    return data?.config || defaultConfig;
+    const savedConfig = localStorage.getItem('siteConfig');
+    if (savedConfig) {
+      const parsedConfig = JSON.parse(savedConfig);
+      return parsedConfig;
+    }
   } catch (error) {
-    console.error('Error al cargar configuración:', error);
-    return defaultConfig;
+    console.error('Error cargando configuración guardada:', error);
   }
+  return defaultConfig;
 };
 
-// Función para guardar configuración en Supabase
-export const saveConfig = async (newConfig: typeof defaultConfig) => {
+// Exportar la configuración activa
+export const config = loadConfig();
+
+// Esta función está obsoleta y se mantendrá solo por compatibilidad
+// Se recomienda usar saveConfig desde configService
+export const saveConfig = (newConfig: typeof defaultConfig) => {
+  console.warn('OBSOLETO: Esta función saveConfig está obsoleta. Use saveConfig desde configService');
   try {
-    const { error } = await supabase
-      .from('site_config')
-      .insert({ config: newConfig });
-
-    if (error) throw error;
-
+    localStorage.setItem('siteConfig', JSON.stringify(newConfig));
+    
     // Disparar un evento para informar a otros componentes
     const event = new CustomEvent('configSaved', { detail: newConfig });
     window.dispatchEvent(event);
     
     return true;
   } catch (error) {
-    console.error('Error al guardar configuración:', error);
+    console.error('Error guardando configuración:', error);
     return false;
   }
 };
-
-// Exportar la configuración activa (asíncrona)
-export const getConfig = loadConfig;

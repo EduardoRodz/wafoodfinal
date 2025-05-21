@@ -1,16 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MenuItem } from '../config';
 import { useCart } from '../context/CartContext';
 import { useConfig } from '../context/ConfigContext';
 import { Plus, Minus } from 'lucide-react';
 import { Button } from './ui/button';
 import { useFormatCurrency } from '../utils/formatCurrency';
 
-interface OrderItemProps {
-  item: MenuItem;
-}
-
-function OrderItem({ item }: OrderItemProps) {
+function OrderItem({ item }) {
   const { config } = useConfig();
   const formatCurrency = useFormatCurrency();
   const { addToCart, removeFromCart, getItemQuantity } = useCart();
@@ -20,7 +15,7 @@ function OrderItem({ item }: OrderItemProps) {
   const [showNote, setShowNote] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageSrc, setImageSrc] = useState(item.image);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const imgRef = useRef(null);
 
   // Efecto para preparar la imagen cuando cambia item.image
   useEffect(() => {
@@ -106,7 +101,7 @@ function OrderItem({ item }: OrderItemProps) {
            '--tw-shadow': '0 4px 6px -1px rgb(0 0 0 / .1), 0 2px 4px -2px rgb(0 0 0 / .1)',
            '--tw-shadow-colored': '0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color)',
            boxShadow: 'var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)'
-         } as React.CSSProperties}>
+         }}>
       <div className="w-full relative bg-gray-100" style={aspectRatioStyle}>
         <img 
           ref={imgRef}
@@ -183,4 +178,6 @@ function OrderItem({ item }: OrderItemProps) {
   );
 }
 
-export default OrderItem;
+export default OrderItem; 
+ 
+ 

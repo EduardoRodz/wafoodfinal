@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from './ui/button';
 import { ShoppingCart, X } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from './ui/drawer';
+import { Drawer, DrawerContent, DrawerTrigger, DrawerClose, DrawerDescription, DrawerTitle } from './ui/drawer';
 import Cart from './Cart';
 import { useIsMobile } from '../hooks/use-mobile';
 import { useConfig } from '../context/ConfigContext';
@@ -32,6 +32,10 @@ const FloatingCartButton = () => {
       <DrawerContent 
         className="max-w-[500px] mx-auto w-[95%] h-[80vh] p-0 font-sans rounded-t-[20px] focus:outline-none shadow-xl flex flex-col"
       >
+        <DrawerTitle className="sr-only">Tu Pedido</DrawerTitle>
+        <DrawerDescription className="sr-only">
+          Carrito de compras donde puedes revisar los productos seleccionados antes de hacer tu pedido
+        </DrawerDescription>
         <div className="sticky top-0 z-10 bg-white pt-3 pb-2 border-b border-gray-100">
           {/* Botón para cerrar */}
           <DrawerClose className="absolute right-3 top-3 rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100 transition-colors">

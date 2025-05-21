@@ -21,9 +21,18 @@ SELECT
     NOW()
 FROM admin_user;
 
--- Insertar configuración inicial del sitio
-INSERT INTO site_config (config, created_at, updated_at)
-VALUES (
+-- Insertar configuración inicial del sitio (nueva estructura con clave-valor)
+INSERT INTO site_config (key, value, description, created_at, updated_at)
+VALUES 
+(
+    'installation_status',
+    '"completed"'::jsonb,
+    'Estado de la instalación del sistema',
+    NOW(),
+    NOW()
+),
+(
+    'restaurant_config',
     '{
       "restaurantName": "WHATSFOOD",
       "whatsappNumber": "18092010357",
@@ -62,25 +71,44 @@ VALUES (
               "description": "Café helado servido con crema",
               "price": 140,
               "image": "https://mojo.generalmills.com/api/public/content/KadqkpTtNk-KOzGZTNo0bg_gmi_hi_res_jpeg.jpeg?v=2c3d8e08&t=16e3ce250f244648bef28c5949fb99ff"
+            }
+          ]
             },
             {
-              "id": "te-verde",
-              "name": "Té Verde",
-              "description": "Premium té verde japonés",
+          "id": "plato-principal",
+          "name": "Plato Principal",
+          "icon": "🍽️",
+          "items": [
+            {
+              "id": "sandwich-vegetariano",
+              "name": "Sándwich Vegetariano",
+              "description": "Vegetales a la parrilla con queso",
               "price": 90,
               "image": "https://mojo.generalmills.com/api/public/content/KadqkpTtNk-KOzGZTNo0bg_gmi_hi_res_jpeg.jpeg?v=2c3d8e08&t=16e3ce250f244648bef28c5949fb99ff"
             },
             {
-              "id": "soda-lima",
-              "name": "Soda de Lima Fresca",
-              "description": "Refrescante soda con menta",
-              "price": 70,
+              "id": "pasta-alfredo",
+              "name": "Pasta Alfredo",
+              "description": "Cremosa pasta blanca",
+              "price": 180,
               "image": "https://mojo.generalmills.com/api/public/content/KadqkpTtNk-KOzGZTNo0bg_gmi_hi_res_jpeg.jpeg?v=2c3d8e08&t=16e3ce250f244648bef28c5949fb99ff"
             }
           ]
         }
       ]
     }'::jsonb,
+    'Configuración general del restaurante',
+    NOW(),
+    NOW()
+),
+(
+    'supabase_credentials',
+    '{
+      "url": "https://numjphltuyfbpyrnevlu.supabase.co",
+      "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bWpwaGx0dXlmYnB5cm5ldmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyMjkzMDUsImV4cCI6MjA2MjgwNTMwNX0.Tzz4PO4bex6-UvaDrLs4FnN8y3x72liy5BoluRnOvCI",
+      "serviceKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bWpwaGx0dXlmYnB5cm5ldmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzIyOTMwNSwiZXhwIjoyMDYyODA1MzA1fQ.LXilXr4H0Hzs3KeEqJPZlS4iJKrr4_GUP7FmPUJvp7c"
+    }'::jsonb,
+    'Credenciales de conexión a Supabase (NOTA: En producción estas deberían estar encriptadas)',
     NOW(),
     NOW()
 );
